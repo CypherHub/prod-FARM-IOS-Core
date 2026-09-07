@@ -5,6 +5,8 @@ An open-source, standalone application for operating physical iOS devices and ru
 It runs locally as-is; authentication is optional on a loopback bind. Harden it for a shared or exposed deployment by supplying your own `AuthProvider` (`PHONE_FARM_AUTH_PLUGIN`) and process supervision — no fork required. Tasks are persisted as `pluginId`, `taskType`, `taskVersion`, and a JSON payload, so an old schedule can never silently execute a new contract.
 
 > Live demo and setup walkthrough: **[gethandler.ai/ios-farm](https://gethandler.ai/ios-farm)**
+>
+> The engineering behind it (why real devices, WebDriverAgent supervision, coordinate taps on a feed that never idles, finding the like button by pixel, never posting twice): **[gethandler.ai/ios-farm/how-it-works](https://gethandler.ai/ios-farm/how-it-works)**
 
 ## Documentation
 
