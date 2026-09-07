@@ -5,6 +5,8 @@ An open-source, standalone application for operating physical iOS devices and ru
 It runs locally as-is; authentication is optional on a loopback bind. Harden it for a shared or exposed deployment by supplying your own `AuthProvider` (`PHONE_FARM_AUTH_PLUGIN`) and process supervision — no fork required. Tasks are persisted as `pluginId`, `taskType`, `taskVersion`, and a JSON payload, so an old schedule can never silently execute a new contract.
 
 > Live demo and setup walkthrough: **[gethandler.ai/ios-farm](https://gethandler.ai/ios-farm)**
+>
+> The full engineering writeup, TikTok on 9 real iPhones reverse engineered from the screen up (Apple's test daemon, the two WebDriverAgent patches, pixel-level UI detection, OCR account switching, never posting twice): **[gethandler.ai/tiktok-iphone-farm](https://gethandler.ai/tiktok-iphone-farm)**
 
 ## Documentation
 
