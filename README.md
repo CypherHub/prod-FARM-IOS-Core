@@ -6,7 +6,7 @@ It runs locally as-is; authentication is optional on a loopback bind. Harden it 
 
 > Live demo and setup walkthrough: **[gethandler.ai/ios-farm](https://gethandler.ai/ios-farm)**
 >
-> The engineering behind it (why real devices, WebDriverAgent supervision, coordinate taps on a feed that never idles, finding the like button by pixel, never posting twice): **[gethandler.ai/ios-farm/how-it-works](https://gethandler.ai/ios-farm/how-it-works)**
+> The full engineering writeup, TikTok on 9 real iPhones reverse engineered from the screen up (Apple's test daemon, the two WebDriverAgent patches, pixel-level UI detection, OCR account switching, never posting twice): **[gethandler.ai/tiktok-iphone-farm](https://gethandler.ai/tiktok-iphone-farm)**
 
 ## Documentation
 
