@@ -72,7 +72,7 @@ Persistent WebDriverAgent supervisor, controlled over a Unix socket
 - Single‑supervisor by design; a lock prevents duplicates.
 
 ### `appium` — `appium --address 127.0.0.1 --port 4725`
-Appium 3 with the XCUITest driver, isolated in `APPIUM_HOME=.appium2`. Task
+Appium 2 with the XCUITest driver, isolated in `APPIUM_HOME=.appium2`. Task
 subprocesses (e.g. `src/tiktok/doomscroll.ts`) connect to it with
 `webdriverio`. The dashboard's remote control does **not** go through Appium —
 it talks to WDA directly. Binds loopback only.
