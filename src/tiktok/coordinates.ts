@@ -23,6 +23,19 @@ export const DEVICE_COORDINATES = {
             like: { x: 345, y: 313 }, save: { x: 345, y: 444 }, swipe: { x: 187, startY: 550, endY: 150, durationMs: 450 },
         },
     },
+    // iPhone XR / 11 (414 × 896 pt). Keep in sync with src/devices/coordinates.ts.
+    iphonexr: {
+        passcodeKeypad: { columnX: [114, 211, 304], rowY: [296, 466, 571, 680] },
+        tiktok: {
+            profileTab: { x: 373, y: 824 }, homeTab: { x: 41, y: 824 }, accountSwitcher: { x: 207, y: 212 },
+            create: { x: 207, y: 824 }, upload: { x: 33, y: 853 }, selectMultiple: { x: 26, y: 830 },
+            useLayout: { x: 26, y: 657 },
+            picker: { circleX: 117, columnStep: 139, firstY: 648, trayY: 484, rowStep: 168, cellX: 68, cellStep: 168, cellY: 707 },
+            pickerNext: { x: 306, y: 829 }, editorNext: { x: 306, y: 856 }, caption: { x: 132, y: 317 },
+            keyboardBack: { x: 24, y: 56 }, draft: { x: 108, y: 846 }, finish: { x: 306, y: 846 },
+            like: { x: 380, y: 480 }, save: { x: 380, y: 605 }, swipe: { x: 207, startY: 720, endY: 200, durationMs: 450 },
+        },
+    },
 } satisfies Record<string, TikTokCoordinates>;
 
 export type CoordinateProfile = keyof typeof DEVICE_COORDINATES;

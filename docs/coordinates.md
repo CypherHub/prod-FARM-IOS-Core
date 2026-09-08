@@ -3,7 +3,8 @@
 **Short answer to "can people add coordinate configs?":** not at runtime. A
 coordinate profile is a compiled constant in the source. `devices.json` only
 *selects* one that already exists. Adding a new layout means editing two files
-and redeploying. Only the `iphone8` profile ships today.
+and redeploying. Two profiles ship today: `iphone8` (375 × 667) and
+`iphonexr` (iPhone XR / 11, 414 × 896).
 
 ## What a profile is
 
@@ -31,7 +32,9 @@ export const DEFAULT_COORDINATE_PROFILE = 'iphone8';
 ```
 
 `iphone8` (375 × 667) also fits the iPhone SE 2/3 and iPhone 7 — identical
-screen geometry.
+screen geometry. `iphonexr` (414 × 896) is seeded by scaling `iphone8`
+(1.104× / 1.343×); its single‑tap targets are close but expect to nudge a few
+per device from the dashboard → **Touch points**.
 
 ## How selection works
 

@@ -91,6 +91,52 @@ export const DEVICE_COORDINATES = {
             swipe: { x: 187, startY: 550, endY: 150, durationMs: 450 },
         },
     },
+    // iPhone XR / 11 (414 × 896 pt).
+    //   Measured on a real iPhone XR feed screenshot: the bottom nav row (home/
+    //   create/profile), the right-hand engagement rail (like/save) and the feed
+    //   swipe vector.
+    //   Still scaled estimates from iphone8 (1.104× / 1.343×), re-measure per
+    //   device from the dashboard → Touch points: accountSwitcher, the
+    //   create/upload/editor flow (upload, selectMultiple, useLayout, picker,
+    //   pickerNext, editorNext, caption, keyboardBack, draft, finish) and the
+    //   passcode keypad.
+    iphonexr: {
+        displayName: 'iPhone XR / 11',
+        productTypes: ['iPhone11,8', 'iPhone12,1'],
+        screenSize: { width: 414, height: 896 },
+        passcodeKeypad: {
+            columnX: [114, 211, 304],
+            rowY: [296, 466, 571, 680],
+        },
+        tiktok: {
+            profileTab: { x: 373, y: 824 },
+            homeTab: { x: 41, y: 824 },
+            accountSwitcher: { x: 207, y: 212 },
+            create: { x: 207, y: 824 },
+            upload: { x: 33, y: 853 },
+            selectMultiple: { x: 26, y: 830 },
+            useLayout: { x: 26, y: 657 },
+            picker: {
+                circleX: 117,
+                columnStep: 139,
+                firstY: 648,
+                trayY: 484,
+                rowStep: 168,
+                cellX: 68,
+                cellStep: 168,
+                cellY: 707,
+            },
+            pickerNext: { x: 306, y: 829 },
+            editorNext: { x: 306, y: 856 },
+            caption: { x: 132, y: 317 },
+            keyboardBack: { x: 24, y: 56 },
+            draft: { x: 108, y: 846 },
+            finish: { x: 306, y: 846 },
+            like: { x: 380, y: 480 },
+            save: { x: 380, y: 605 },
+            swipe: { x: 207, startY: 720, endY: 200, durationMs: 450 },
+        },
+    },
 } satisfies Record<string, DeviceCoordinates>;
 
 export type CoordinateProfile = keyof typeof DEVICE_COORDINATES;
