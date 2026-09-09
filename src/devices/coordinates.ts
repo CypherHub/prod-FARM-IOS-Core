@@ -20,8 +20,11 @@ export interface DeviceCoordinates {
         accountSwitcher: Point;
         create: Point;
         upload: Point;
+        photoMode: Point;
+        photosAlbum: Point;
         selectMultiple: Point;
         useLayout: Point;
+        title: Point;
         picker: {
             circleX: number;
             columnStep: number;
@@ -67,9 +70,12 @@ export const DEVICE_COORDINATES = {
             homeTab: { x: 38, y: 653 },
             accountSwitcher: { x: 185, y: 158 },
             create: { x: 187, y: 640 },
-            upload: { x: 30, y: 635 },
+            upload: { x: 300, y: 545 },
+            photoMode: { x: 243, y: 485 },
+            photosAlbum: { x: 190, y: 88 },
             selectMultiple: { x: 24, y: 618 },
             useLayout: { x: 24, y: 489 },
+            title: { x: 82, y: 175 },
             picker: {
                 circleX: 106,
                 columnStep: 126,
@@ -113,22 +119,34 @@ export const DEVICE_COORDINATES = {
             homeTab: { x: 41, y: 824 },
             accountSwitcher: { x: 207, y: 212 },
             create: { x: 207, y: 824 },
-            upload: { x: 33, y: 853 },
+            // Gallery thumbnail to the right of the red record button on the
+            // create camera (measured 2026-09-09 from a live XR screenshot).
+            // PHOTO-mode gallery thumbnail, bottom-left. VIDEO-mode gallery is
+            // to the right of the record button; slideshows switch to PHOTO first.
+            upload: { x: 40, y: 832 },
+            photoMode: { x: 268, y: 652 },
+            photosAlbum: { x: 229, y: 122 },
             selectMultiple: { x: 26, y: 830 },
             useLayout: { x: 26, y: 657 },
+            title: { x: 91, y: 235 },
             picker: {
-                circleX: 117,
-                columnStep: 139,
-                firstY: 648,
-                trayY: 484,
-                rowStep: 168,
+                // Top-right selection circles on the first grid row that has
+                // them (the row under the uncircled Recents strip). Measured
+                // 2026-09-09; firstY 648 opened a photo, 270 selected #1.
+                // Do not tap above firstY — that strip has no circles and
+                // opens a single-image editor.
+                circleX: 122,
+                columnStep: 138,
+                firstY: 270,
+                trayY: 270,
+                rowStep: 139,
                 cellX: 68,
                 cellStep: 168,
                 cellY: 707,
             },
             pickerNext: { x: 306, y: 829 },
             editorNext: { x: 306, y: 856 },
-            caption: { x: 132, y: 317 },
+            caption: { x: 160, y: 276 },
             keyboardBack: { x: 24, y: 56 },
             draft: { x: 108, y: 846 },
             finish: { x: 306, y: 846 },
@@ -180,16 +198,16 @@ export function coordinatesForProfile(profile: string = DEFAULT_COORDINATE_PROFI
 // (picker grid, swipe vector and the passcode keypad are not single points and
 // stay profile-level for now.)
 export const CALIBRATABLE_POINTS = [
-    'profileTab', 'homeTab', 'accountSwitcher', 'create', 'upload', 'selectMultiple', 'useLayout',
-    'pickerNext', 'editorNext', 'caption', 'keyboardBack', 'draft', 'finish', 'like', 'save',
+    'profileTab', 'homeTab', 'accountSwitcher', 'create', 'upload', 'photoMode', 'photosAlbum', 'selectMultiple', 'useLayout',
+    'pickerNext', 'editorNext', 'title', 'caption', 'keyboardBack', 'draft', 'finish', 'like', 'save',
 ] as const;
 
 export type CalibratablePoint = typeof CALIBRATABLE_POINTS[number];
 
 export const POINT_LABELS: Record<CalibratablePoint, string> = {
     profileTab: 'TikTok: Profile tab', homeTab: 'TikTok: Home tab', accountSwitcher: 'TikTok: Account switcher',
-    create: 'TikTok: Create (+)', upload: 'TikTok: Upload', selectMultiple: 'TikTok: Select multiple', useLayout: 'TikTok: Use layout',
-    pickerNext: 'TikTok: Media picker · Next', editorNext: 'TikTok: Editor · Next', caption: 'TikTok: Caption field',
+    create: 'TikTok: Create (+)', upload: 'TikTok: Upload / gallery', photoMode: 'TikTok: PHOTO mode', photosAlbum: 'TikTok: Photos album tab', selectMultiple: 'TikTok: Select multiple', useLayout: 'TikTok: Use layout',
+    pickerNext: 'TikTok: Media picker · Next', editorNext: 'TikTok: Editor · Next', title: 'TikTok: Title field', caption: 'TikTok: Caption field',
     keyboardBack: 'TikTok: Keyboard · back', draft: 'TikTok: Save draft', finish: 'TikTok: Post / Finish',
     like: 'TikTok: Like button', save: 'TikTok: Save/bookmark button',
 };

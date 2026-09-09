@@ -291,9 +291,19 @@ function useDeviceSummary(summary: HTMLElement): void {
     void connectRemote();
 }
 
+function pinAutomationLogToLatest(): void {
+    const log = document.querySelector<HTMLElement>('#device-activity pre');
+    if (log) log.scrollTop = log.scrollHeight;
+}
+
 document.addEventListener('htmx:afterSwap', () => {
     const summary = document.querySelector<HTMLElement>('#device-summary[data-screen-width]');
     if (summary) useDeviceSummary(summary);
+    pinAutomationLogToLatest();
+});
+
+document.addEventListener('htmx:afterSettle', () => {
+    pinAutomationLogToLatest();
 });
 
 document.addEventListener('htmx:afterRequest', (event) => {
@@ -638,7 +648,7 @@ elements.postForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const destination = selectedDestination();
     if (orderedMedia.length === 0) { elements.postResult.textContent = 'Choose media first.'; return; }
-    if (orderedMedia.length > 3) { elements.postResult.textContent = 'Choose no more than three slideshow images.'; return; }
+    if (orderedMedia.length > 6) { elements.postResult.textContent = 'Choose no more than six slideshow images.'; return; }
     const videos = orderedMedia.filter(({ type }) => type.startsWith('video/'));
     const images = orderedMedia.filter(({ type }) => type.startsWith('image/'));
     if (!((videos.length === 1 && orderedMedia.length === 1) || images.length === orderedMedia.length)) {

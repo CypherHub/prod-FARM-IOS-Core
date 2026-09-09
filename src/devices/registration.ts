@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { remote, type Browser } from 'webdriverio';
 
 import { switchTikTokAccount, tapCoordinate } from '../tiktok/actions.js';
+import { tiktokAppiumCapabilities, foregroundTikTok, backgroundTikTok } from '../tiktok/appium-session.js';
 import { coordinateProfiles, coordinatesForProfile, profileForProductType, type CoordinateProfile } from './coordinates.js';
 import { discoverConnectedDevices, type Device } from './discovery.js';
 import { loadRegisteredDevices, mutateRegisteredDevices, type RegisteredDevice } from './registry.js';
@@ -394,22 +395,18 @@ export class DeviceRegistrationService implements DeviceRegistrationManager {
         let driver: Browser | undefined;
         try {
             const appiumPort = Number(process.env.APPIUM_PORT ?? 4725);
+            const bundleId = process.env.TIKTOK_BUNDLE_ID ?? 'com.zhiliaoapp.musically';
             driver = await remote({
                 hostname: process.env.APPIUM_HOST ?? '127.0.0.1',
                 port: appiumPort,
                 path: '/',
                 logLevel: 'error',
-                capabilities: {
-                    platformName: 'iOS',
-                    'appium:automationName': 'XCUITest',
-                    'appium:udid': session.device.udid,
-                    'appium:bundleId': process.env.TIKTOK_BUNDLE_ID ?? 'com.zhiliaoapp.musically',
-                    'appium:noReset': true,
-                    'appium:forceAppLaunch': true,
+                capabilities: tiktokAppiumCapabilities(session.device.udid, bundleId, {
                     'appium:webDriverAgentUrl': `http://127.0.0.1:${session.wdaLocalPort}`,
-                },
+                }),
             });
-            session.checks.appium = check('passed', 'Appium attached to WDA and launched TikTok without resetting it');
+            await foregroundTikTok(driver, bundleId);
+            session.checks.appium = check('passed', 'Appium attached to WDA and opened TikTok without killing it');
             const stream = await control.getMjpegStream(session.device.udid);
             const reader = stream.body!.getReader();
             const first = await reader.read();
@@ -449,7 +446,10 @@ export class DeviceRegistrationService implements DeviceRegistrationManager {
             else if (session.checks.touch.state === 'checking') session.checks.touch = check('failed', message);
             else session.checks.accounts = check('blocked', message);
         } finally {
-            if (driver) await driver.deleteSession().catch(() => undefined);
+            if (driver) {
+                await backgroundTikTok(driver).catch(() => undefined);
+                await driver.deleteSession().catch(() => undefined);
+            }
         }
     }
 

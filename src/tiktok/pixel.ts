@@ -6,14 +6,11 @@ const RED_MAX_B = 110;
 const CHECK_RADIUS = 20;
 const CHECKED_PIXEL_THRESHOLD = 50;
 
-// Detects TikTok's red checkbox fill within a small radius of a
-// point-space coordinate. Toggle state (filled vs. outlined circle) isn't
-// text, so OCR can't read it — this is a color check instead.
-export async function isRedCheckboxChecked(
+export async function redCheckboxPixelCount(
     screenshot: Buffer,
     point: { x: number; y: number },
     scale: number,
-): Promise<boolean> {
+): Promise<number> {
     const { data, info } = await sharp(screenshot).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
     const centerX = Math.round(point.x * scale);
     const centerY = Math.round(point.y * scale);
@@ -27,5 +24,17 @@ export async function isRedCheckboxChecked(
             if (r > RED_MIN_R && g < RED_MAX_G && b < RED_MAX_B) redCount += 1;
         }
     }
-    return redCount > CHECKED_PIXEL_THRESHOLD;
+    return redCount;
+}
+
+// Detects TikTok's red checkbox fill within a small radius of a
+// point-space coordinate. Toggle state (filled vs. outlined circle) isn't
+// text, so OCR can't read it — this is a color check instead.
+export async function isRedCheckboxChecked(
+    screenshot: Buffer,
+    point: { x: number; y: number },
+    scale: number,
+    threshold = CHECKED_PIXEL_THRESHOLD,
+): Promise<boolean> {
+    return (await redCheckboxPixelCount(screenshot, point, scale)) > threshold;
 }

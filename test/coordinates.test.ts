@@ -23,11 +23,13 @@ test('validateCoordinateOverrides enforces known keys, numbers and screen bounds
     assert.throws(() => validateCoordinateOverrides([], 'iphone8'), /must be an object/);
 });
 
-test('every calibratable point exists on the profile', () => {
-    const tiktok = coordinatesForProfile('iphone8').tiktok;
-    for (const name of CALIBRATABLE_POINTS) {
-        const point = tiktok[name];
-        assert.equal(typeof point.x, 'number', name);
-        assert.equal(typeof point.y, 'number', name);
+test('every calibratable point exists on both profiles', () => {
+    for (const profile of ['iphone8', 'iphonexr'] as const) {
+        const tiktok = coordinatesForProfile(profile).tiktok;
+        for (const name of CALIBRATABLE_POINTS) {
+            const point = tiktok[name];
+            assert.equal(typeof point.x, 'number', `${profile}.${name}`);
+            assert.equal(typeof point.y, 'number', `${profile}.${name}`);
+        }
     }
 });

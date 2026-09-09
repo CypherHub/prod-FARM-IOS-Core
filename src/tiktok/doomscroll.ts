@@ -2,6 +2,7 @@ import { remote, type Browser } from 'webdriverio';
 
 import { loadRegisteredDevices, resolveDeviceCoordinates, WdaRemoteControl } from '@git-agni/phone-farm-core';
 import { coordinateProfile, registeredAccounts } from './runtime-settings.js';
+import { tiktokAppiumCapabilities, foregroundTikTok, backgroundTikTok } from './appium-session.js';
 import { switchTikTokAccount, tapCoordinate } from './actions.js';
 import { detectEngagementControls } from './engagement-controls.js';
 import {
@@ -86,20 +87,12 @@ const wdaUrl = process.env.WDA_URL;
 const tiktokBundleId = process.env.TIKTOK_BUNDLE_ID ?? 'com.zhiliaoapp.musically';
 
 const capabilities: WebdriverIO.Capabilities & Record<string, unknown> = {
-    platformName: 'iOS',
-    'appium:automationName': 'XCUITest',
-    'appium:udid': udid,
-    'appium:bundleId': tiktokBundleId,
-    'appium:noReset': true,
-    'appium:forceAppLaunch': true,
-    'appium:shouldTerminateApp': true,
-    'appium:newCommandTimeout': 120,
-    'appium:wdaLaunchTimeout': 120000,
-    'appium:wdaConnectionTimeout': 120000,
-    // TikTok's video feed never becomes fully idle. Waiting for quiescence can
-    // make otherwise-completed gestures block until the WDA proxy times out.
-    'appium:waitForIdleTimeout': 0,
-    'appium:showXcodeLog': process.env.SHOW_XCODE_LOG === 'true',
+    ...tiktokAppiumCapabilities(udid, tiktokBundleId, {
+        'appium:newCommandTimeout': 120,
+        'appium:wdaLaunchTimeout': 120000,
+        'appium:wdaConnectionTimeout': 120000,
+        'appium:showXcodeLog': process.env.SHOW_XCODE_LOG === 'true',
+    }),
 };
 
 if (wdaUrl) {
@@ -186,6 +179,7 @@ try {
     });
 
     await driver.updateSettings({ defaultActiveApplication: tiktokBundleId });
+    await foregroundTikTok(driver, tiktokBundleId);
     await driver.pause(3000);
 
     if (switchAccountName) {
@@ -269,6 +263,7 @@ try {
     console.log(`Finished doomscroll: videosViewed=${videosViewed} swipes=${swipes} likes=${likes} saves=${saves} elapsedMs=${elapsedMs} reason=${reason}`);
 } finally {
     if (driver) {
+        await backgroundTikTok(driver).catch(() => {});
         await driver.deleteSession();
     }
 }

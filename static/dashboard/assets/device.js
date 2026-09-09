@@ -222,10 +222,19 @@ function useDeviceSummary(summary) {
         document.title = `${name} · iOS Automation`;
     void connectRemote();
 }
+function pinAutomationLogToLatest() {
+    const log = document.querySelector('#device-activity pre');
+    if (log)
+        log.scrollTop = log.scrollHeight;
+}
 document.addEventListener('htmx:afterSwap', () => {
     const summary = document.querySelector('#device-summary[data-screen-width]');
     if (summary)
         useDeviceSummary(summary);
+    pinAutomationLogToLatest();
+});
+document.addEventListener('htmx:afterSettle', () => {
+    pinAutomationLogToLatest();
 });
 document.addEventListener('htmx:afterRequest', (event) => {
     const detail = event.detail;
@@ -586,8 +595,8 @@ elements.postForm.addEventListener('submit', async (event) => {
         elements.postResult.textContent = 'Choose media first.';
         return;
     }
-    if (orderedMedia.length > 3) {
-        elements.postResult.textContent = 'Choose no more than three slideshow images.';
+    if (orderedMedia.length > 6) {
+        elements.postResult.textContent = 'Choose no more than six slideshow images.';
         return;
     }
     const videos = orderedMedia.filter(({ type }) => type.startsWith('video/'));

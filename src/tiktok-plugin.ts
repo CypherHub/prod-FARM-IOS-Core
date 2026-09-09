@@ -94,8 +94,8 @@ function createPostTask(configuration: TikTokPluginConfiguration): TaskDefinitio
         type: 'post', version: 1, displayName: 'TikTok post',
         validate(value, context) {
             const input = objectPayload(value);
-            if (!Array.isArray(input.media) || input.media.length < 1 || input.media.length > 3) {
-                throw new Error('Choose one to three media files');
+            if (!Array.isArray(input.media) || input.media.length < 1 || input.media.length > 6) {
+                throw new Error('Choose one to six media files');
             }
             const media = input.media.map((item) => {
                 const candidate = objectPayload(item);
@@ -104,6 +104,11 @@ function createPostTask(configuration: TikTokPluginConfiguration): TaskDefinitio
                 }
                 return { assetId: candidate.assetId, name: candidate.name, mimeType: candidate.mimeType };
             });
+            const videos = media.filter(({ mimeType }) => mimeType.startsWith('video/'));
+            const images = media.filter(({ mimeType }) => mimeType.startsWith('image/'));
+            if (!((videos.length === 1 && media.length === 1) || images.length === media.length)) {
+                throw new Error('Upload exactly one video, or upload only slideshow images');
+            }
             if (input.destination !== 'draft' && input.destination !== 'publish') throw new Error('Invalid post destination');
             if (typeof input.account !== 'string' || !input.account.trim()) throw new Error('Choose a TikTok account');
             const caption = optionalString(input.caption, 'caption');
@@ -240,7 +245,7 @@ export function createTikTokPlugin(configuration: TikTokPluginConfiguration = {}
                         if (part.file.truncated) throw new Error(`${name} exceeds the upload limit`);
                         files.push({ path: filePath, name, mimeType: part.mimetype });
                     }
-                    if (files.length < 1 || files.length > 3) throw new Error('Choose one to three media files');
+                    if (files.length < 1 || files.length > 6) throw new Error('Choose one to six media files');
                     const videos = files.filter(({ mimeType }) => mimeType.startsWith('video/'));
                     const images = files.filter(({ mimeType }) => mimeType.startsWith('image/'));
                     if (!((videos.length === 1 && files.length === 1) || images.length === files.length)) {

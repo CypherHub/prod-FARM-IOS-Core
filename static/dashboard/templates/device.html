@@ -81,7 +81,7 @@
                     <div><span class="eyebrow">Device activity</span><h2>Automation log</h2></div>
                     <p>Live output from the latest doomscroll or post automation on this device.</p>
                     <section id="device-activity" class="run-panel loading-card"
-                        hx-get="/api/devices/__DEVICE_UDID__/fragments/activity" hx-trigger="load" hx-swap="outerHTML">
+                        hx-get="/api/devices/__DEVICE_UDID__/fragments/activity" hx-trigger="load" hx-swap="outerHTML settle:0 scroll:pre:bottom show:none">
                         <span class="spinner" aria-hidden="true"></span>Loading recent activity…
                     </section>
                 </section>
@@ -167,7 +167,7 @@
     </dialog>
     <dialog id="doomscroll-dialog">
         <form id="doomscroll-form" class="modal" hx-post="/api/devices/__DEVICE_UDID__/fragments/scroll-run"
-            hx-target="#device-activity" hx-swap="outerHTML" hx-disabled-elt="button">
+            hx-target="#device-activity" hx-swap="outerHTML settle:0 scroll:pre:bottom show:none" hx-disabled-elt="button">
             <div class="modal-head">
                 <div><span class="eyebrow">TikTok</span><h2>Configure doomscroll</h2></div>
                 <button id="close-doomscroll" class="icon-button" type="button">Close</button>
@@ -225,7 +225,7 @@
     <dialog id="post-dialog">
         <form id="post-form" class="modal">
             <div class="modal-head"><div><span class="eyebrow">TikTok</span><h2>Create post</h2></div><button id="close-post" class="icon-button" type="button">Close</button></div>
-            <p>Choose one video or up to three slideshow images. Reorder images before starting.</p>
+            <p>Choose one video or up to six slideshow images. Reorder images before starting.</p>
             <label for="media">Media</label>
             <input id="media" name="media-picker" type="file" accept="video/*,image/*" multiple required>
             <ol id="media-list"></ol>

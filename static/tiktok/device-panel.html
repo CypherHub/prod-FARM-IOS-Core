@@ -9,7 +9,7 @@
 </form>
 <form id="tiktok-post-form" class="tiktok-form">
   <h3>Post media</h3>
-  <label>Media (1–3 files)<input name="media" type="file" accept="image/*,video/*" multiple required></label>
+  <label>Media (1–6 files)<input name="media" type="file" accept="image/*,video/*" multiple required></label>
   <div class="timing"><label>Account<input name="account" required autocomplete="off"></label><label>Destination<select name="destination"><option value="draft">Draft</option><option value="publish">Publish</option></select></label><label>Music URL<input name="musicUrl" type="url"></label></div>
   <label>Caption<textarea name="caption" maxlength="2200"></textarea></label>
   <label><input name="recurringPublishConfirmed" type="checkbox"> I explicitly approve recurring public posts</label>
@@ -47,7 +47,7 @@
     event.preventDefault(); result.textContent = 'Uploading…'; var assets = [];
     try {
       var form = new FormData(event.currentTarget); var files = form.getAll('media').filter(function (file) { return file.size; });
-      if (files.length < 1 || files.length > 3) throw new Error('Choose one to three files.');
+      if (files.length < 1 || files.length > 6) throw new Error('Choose one to six files.');
       var upload = new FormData(); files.forEach(function (file) { upload.append('media', file); });
       var uploadResponse = await fetch('/api/assets', {method: 'POST', body: upload});
       if (!uploadResponse.ok) throw new Error((await uploadResponse.json()).error || 'Upload failed');

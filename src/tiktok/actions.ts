@@ -21,6 +21,31 @@ export async function tapCoordinate(driver: Browser, x: number, y: number, label
     console.log(`Tapped ${label} at (${x}, ${y})`);
 }
 
+export async function swipeCoordinate(
+    driver: Browser,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    durationMs: number,
+    label: string,
+): Promise<void> {
+    await driver.performActions([{
+        type: 'pointer',
+        id: 'finger',
+        parameters: { pointerType: 'touch' },
+        actions: [
+            { type: 'pointerMove', duration: 0, x: startX, y: startY },
+            { type: 'pointerDown', button: 0 },
+            { type: 'pause', duration: 80 },
+            { type: 'pointerMove', duration: durationMs, x: endX, y: endY },
+            { type: 'pointerUp', button: 0 },
+        ],
+    }]);
+    await driver.releaseActions();
+    console.log(`Swiped ${label} from (${startX}, ${startY}) to (${endX}, ${endY})`);
+}
+
 export interface AccountSwitchCoords {
     profileTabX: number;
     profileTabY: number;
