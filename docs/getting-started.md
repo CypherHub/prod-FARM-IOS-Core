@@ -112,10 +112,23 @@ It ends with `** TEST BUILD SUCCEEDED **`.
 
 ## 6. Run the four processes
 
-Each is long‑lived. In development that's four terminals; for an always‑on host,
-wrap each in a `launchd` agent (macOS) or systemd unit with your own process
-manager — they need no arguments, just the repo as the working directory and
-`.env` on the path.
+Each is long‑lived. The usual development command is one supervisor that
+starts all four, prefixes their logs, and restarts a process that exits:
+
+```sh
+npm start
+```
+
+A crash loop trips a failsafe and stops the farm: **5 exits in 60 seconds**,
+or **10 consecutive exits** that did not stay up for 60 seconds. Backoff
+starts at 1s and doubles to 30s. Override with `FARM_RESTART_BURST`,
+`FARM_RESTART_WINDOW_MS`, `FARM_MAX_CONSECUTIVE`, `FARM_HEALTHY_MS`,
+`FARM_BACKOFF_MS`, and `FARM_MAX_BACKOFF_MS`. Ctrl+C / SIGTERM stops every
+child. A second `npm start` is refused while `.farm.lock` is held.
+
+For an always‑on host, wrap each process in a `launchd` agent (macOS) or
+systemd unit instead — they need no arguments, just the repo as the working
+directory and `.env` on the path.
 
 ```sh
 npm run appium         # Appium 2 + XCUITest on :4725

@@ -35,6 +35,7 @@
     "db:setup": "node --env-file-if-exists=.env --import tsx src/database/setup.ts",
     "worker": "node --env-file-if-exists=.env --env-file-if-exists=.env.devices --import tsx src/scheduler/worker.ts",
     "web": "node --env-file-if-exists=.env --env-file-if-exists=.env.devices --import tsx src/api/server.ts",
+    "start": "node --env-file-if-exists=.env --env-file-if-exists=.env.devices --import tsx src/supervise.ts",
     "build:web": "tsc -p tsconfig.web.json",
     "preweb": "npm run build:web",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json --noEmit",

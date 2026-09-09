@@ -30,7 +30,13 @@ npm run db:migrate
 npm run wda:prepare
 ```
 
-Run these long-lived processes (wrap each in a `launchd` agent or systemd unit for an always-on host):
+Run the four long-lived processes in one terminal. `npm start` restarts a crashed process with backoff until a crash-loop failsafe trips (5 exits in 60s, or 10 consecutive short-lived exits). Ctrl+C stops the farm. For an always-on host, wrap each process in a `launchd` agent or systemd unit instead.
+
+```sh
+npm start
+```
+
+Or run them separately:
 
 ```sh
 npm run appium

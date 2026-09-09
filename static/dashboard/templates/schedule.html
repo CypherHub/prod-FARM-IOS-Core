@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Schedule · Handler</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <a class="brand-name" href="/">iOS Farm</a>
+                <a class="brand-by" href="https://gethandler.ai" target="_blank" rel="noopener">by Handler</a>
+            </div>
+            <nav class="topbar-nav"><a class="button secondary" href="/">Devices</a><a class="button secondary" href="/tasks">Tasks</a><a class="button primary" href="/schedule">Schedule</a>__PLUGIN_NAV____AUTH_NAV__</nav>
+        </div>
+    </header>
+    <main class="shell">
+        <header class="page-header">
+            <div><span class="eyebrow">Bulk publishing</span><h1>Schedule</h1><p>Drop a batch of videos, review every caption, sound and account, then queue the lot in one pass.</p></div>
+        </header>
+
+        <section class="panel schedule-defaults">
+            <div class="section-heading"><div><span class="eyebrow">Applies to new rows</span><h2>Batch defaults</h2></div><div class="inline-actions"><button id="shuffle-times" class="button secondary" type="button">Shuffle times</button><button id="apply-defaults" class="button secondary" type="button">Apply to all rows</button></div></div>
+            <div class="defaults-grid">
+                <div class="field"><label for="batch-device">Device</label><select id="batch-device"></select></div>
+                <div class="field"><label for="batch-account">Account</label><select id="batch-account"></select></div>
+                <div class="field">
+                    <label>Finish as</label>
+                    <fieldset><div class="choices">
+                        <label><input type="radio" name="batch-destination" value="draft" checked> Draft</label>
+                        <label><input type="radio" name="batch-destination" value="publish"> Publish</label>
+                    </div></fieldset>
+                </div>
+                <div class="field"><label for="batch-date">Start date</label><input id="batch-date" type="date"></div>
+                <fieldset class="weekday-field field-wide"><legend>Time slots <small>— one post per slot per day, at a random time inside it; fills forward day by day</small></legend>
+                    <div class="weekday-options" id="slot-choices">
+                        <label><input type="checkbox" id="slot-morning" value="morning" checked><span>Morning · 9–12</span></label>
+                        <label><input type="checkbox" id="slot-afternoon" value="afternoon"><span>Afternoon · 12–4</span></label>
+                        <label><input type="checkbox" id="slot-evening" value="evening" checked><span>Evening · 4–7</span></label>
+                    </div>
+                </fieldset>
+                <div class="field field-wide"><label for="batch-caption">Shared caption <small>(optional)</small></label><textarea id="batch-caption" maxlength="2200" placeholder="Used for every new row; edit per row below."></textarea></div>
+                <div class="field field-wide"><label for="batch-music">Shared TikTok sound URL <small>(optional)</small></label><input id="batch-music" type="url" placeholder="https://www.tiktok.com/music/…"></div>
+            </div>
+            <div id="batch-publish-confirm" class="publish-confirm"><label><input id="batch-confirm-publish" type="checkbox"> I understand every row will publish publicly to the selected TikTok account.</label></div>
+        </section>
+
+        <section class="panel">
+            <div class="section-heading"><div><span class="eyebrow">Step 1</span><h2>Add videos</h2></div></div>
+            <label id="drop-zone" class="drop-zone" for="file-input">
+                <strong>Drop videos here</strong>
+                <span>or click to choose files — one video becomes one post</span>
+                <input id="file-input" type="file" accept="video/*" multiple hidden>
+            </label>
+        </section>
+
+        <section class="panel">
+            <div class="section-heading"><div><span class="eyebrow">Step 2</span><h2>Review queue</h2></div><div class="inline-actions"><span id="queue-summary" class="run-meta"></span><button id="schedule-all" class="button primary" type="button" disabled>Schedule all</button></div></div>
+            <div id="queue" class="queue"></div>
+            <div id="queue-empty" class="empty-state"><h2>No videos queued</h2><p>Add videos above to build the batch.</p></div>
+        </section>
+
+        <section class="panel">
+            <div class="section-heading"><div><span class="eyebrow">On the selected device</span><h2>Scheduled posts</h2></div><button id="refresh-scheduled" class="button secondary" type="button">Refresh</button></div>
+            <div id="scheduled-list" class="task-list loading-card"><span class="spinner" aria-hidden="true"></span>Loading scheduled posts…</div>
+        </section>
+    </main>
+    <script type="module" src="/assets/schedule.js"></script>
+    <footer class="app-footer">__FOOTER__</footer>
+</body>
+</html>

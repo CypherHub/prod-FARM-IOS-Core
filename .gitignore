@@ -5,6 +5,7 @@ dist/
 !.env.example
 devices.json
 .wda/
+.farm.lock/
 .scheduler-data/
 static/assets/
 *.log

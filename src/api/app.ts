@@ -43,9 +43,11 @@ interface LoadedDashboardTheme {
     indexHtml: string;
     deviceHtml: string;
     tasksHtml: string;
+    scheduleHtml: string;
     styles: string;
     deviceScript: string;
     tasksScript: string;
+    scheduleScript: string;
     registerDeviceHtml: string;
     registerDeviceScript: string;
     htmx: string;
@@ -83,7 +85,7 @@ function page(title: string, body: string, logoutPath?: string, navLinks: readon
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(title)}</title><style>
 body{font:15px system-ui,sans-serif;margin:0;background:#f6f7f9;color:#17202a}nav{padding:16px 24px;background:#111827;color:white}nav a{color:white;margin-right:18px}main{max-width:1100px;margin:24px auto;padding:0 20px}.card{background:white;border:1px solid #dde2e8;border-radius:10px;padding:18px;margin:14px 0}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #e5e7eb}code{font-size:12px}.muted{color:#64748b}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}button,.button{background:#2563eb;color:white;border:0;border-radius:6px;padding:8px 12px;text-decoration:none;cursor:pointer}input,select,textarea{padding:8px;border:1px solid #cbd5e1;border-radius:6px}</style></head>
-<body><nav><a href="/">Devices</a><a href="/tasks">Tasks</a><a href="/docs">API</a>${extra}${logout}</nav><main>${body}</main><footer style="max-width:1100px;margin:24px auto;padding:16px 20px;color:#94a3b8;font-size:12px">${FOOTER_HTML}</footer></body></html>`;
+<body><nav><a href="/">Devices</a><a href="/schedule">Schedule</a><a href="/tasks">Tasks</a><a href="/docs">API</a>${extra}${logout}</nav><main>${body}</main><footer style="max-width:1100px;margin:24px auto;padding:16px 20px;color:#94a3b8;font-size:12px">${FOOTER_HTML}</footer></body></html>`;
 }
 
 async function registeredWithStatus() {
@@ -164,14 +166,16 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
     if (options.dashboardTheme) {
         const root = options.dashboardTheme.rootDirectory;
         const require = createRequire(import.meta.url);
-        const [indexHtml, deviceHtml, tasksHtml, registerDeviceHtml, styles, deviceScript, tasksScript, registerDeviceScript, htmx] = await Promise.all([
+        const [indexHtml, deviceHtml, tasksHtml, scheduleHtml, registerDeviceHtml, styles, deviceScript, tasksScript, scheduleScript, registerDeviceScript, htmx] = await Promise.all([
             readFile(path.join(root, 'templates/index.html'), 'utf8'),
             readFile(path.join(root, 'templates/device.html'), 'utf8'),
             readFile(path.join(root, 'templates/tasks.html'), 'utf8'),
+            readFile(path.join(root, 'templates/schedule.html'), 'utf8'),
             readFile(path.join(root, 'templates/register-device.html'), 'utf8'),
             readFile(path.join(root, 'styles.css'), 'utf8'),
             readFile(path.join(root, 'assets/device.js'), 'utf8'),
             readFile(path.join(root, 'assets/tasks.js'), 'utf8'),
+            readFile(path.join(root, 'assets/schedule.js'), 'utf8'),
             readFile(path.join(root, 'assets/register-device.js'), 'utf8'),
             readFile(require.resolve('htmx.org/dist/htmx.min.js'), 'utf8'),
         ]);
@@ -179,7 +183,8 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
         // fresh URL that no browser or CDN can serve stale.
         const versions: Record<string, string> = {
             'styles.css': assetHash(styles), 'device.js': assetHash(deviceScript),
-            'tasks.js': assetHash(tasksScript), 'register-device.js': assetHash(registerDeviceScript),
+            'tasks.js': assetHash(tasksScript), 'schedule.js': assetHash(scheduleScript),
+            'register-device.js': assetHash(registerDeviceScript),
             'htmx.min.js': assetHash(htmx),
         };
         const finalize = (html: string) => {
@@ -190,8 +195,9 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
         };
         themed = {
             indexHtml: finalize(indexHtml), deviceHtml: finalize(deviceHtml),
-            tasksHtml: finalize(tasksHtml), registerDeviceHtml: finalize(registerDeviceHtml),
-            styles, deviceScript, tasksScript, registerDeviceScript, htmx,
+            tasksHtml: finalize(tasksHtml), scheduleHtml: finalize(scheduleHtml),
+            registerDeviceHtml: finalize(registerDeviceHtml),
+            styles, deviceScript, tasksScript, scheduleScript, registerDeviceScript, htmx,
         };
     }
 
@@ -566,6 +572,7 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
         app.get('/assets/styles.css', asset('text/css', theme.styles));
         app.get('/assets/device.js', asset('text/javascript', theme.deviceScript));
         app.get('/assets/tasks.js', asset('text/javascript', theme.tasksScript));
+        app.get('/assets/schedule.js', asset('text/javascript', theme.scheduleScript));
         app.get('/assets/register-device.js', asset('text/javascript', theme.registerDeviceScript));
         app.get('/assets/htmx.min.js', asset('text/javascript', theme.htmx));
         app.get('/api/fragments/devices', async (_request, reply) => {
@@ -647,6 +654,9 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
     });
     app.get('/tasks', async (_request, reply) => reply.type('text/html').send(
         themed?.tasksHtml ?? renderPage('Tasks', '<h1>Tasks</h1><p>The JSON API exposes schedules and execution history. Installed plugins add task forms to each device page.</p>'),
+    ));
+    app.get('/schedule', async (_request, reply) => reply.type('text/html').send(
+        themed?.scheduleHtml ?? renderPage('Schedule', '<h1>Schedule content</h1><p>The themed dashboard provides a batch content-scheduling page here. Without it, upload media to <code>POST /api/devices/:udid/posts</code>.</p>'),
     ));
     app.get('/docs', async (_request, reply) => reply.type('text/html').send(renderPage('API', '<h1>API</h1><p>Use <code>/api/plugins</code>, <code>/api/devices</code>, <code>/api/schedules</code>, and <code>/api/executions</code>. This route follows the configured authentication policy.</p>')));
 
