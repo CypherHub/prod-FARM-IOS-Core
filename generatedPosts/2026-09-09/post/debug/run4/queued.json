@@ -1,0 +1,43 @@
+{
+  "id": "ca7d0b9c-c7c9-44da-bf21-939f84f05943",
+  "deviceUdid": "00008020-000819CA2203002E",
+  "pluginId": "com.git-agni.tiktok",
+  "taskType": "post",
+  "taskVersion": 1,
+  "payload": {
+    "media": [
+      {
+        "name": "slide-1.jpg",
+        "assetId": "0ae9d023-3c2a-4c19-805f-37b08212f8a8",
+        "mimeType": "image/jpeg"
+      },
+      {
+        "name": "slide-2.jpg",
+        "assetId": "a2cc18ee-bf1b-4144-8400-2aad4d5f7d9f",
+        "mimeType": "image/jpeg"
+      },
+      {
+        "name": "slide-3.jpg",
+        "assetId": "4bb29016-1779-4566-82af-2f5a466ad447",
+        "mimeType": "image/jpeg"
+      },
+      {
+        "name": "slide-4.jpg",
+        "assetId": "f4aaf4de-4c62-42c4-a45d-e12c04390512",
+        "mimeType": "image/jpeg"
+      }
+    ],
+    "account": "@pixl.robotics",
+    "caption": "What do you guys think? Which is your fav?\nFollow for more wellness tech recs!\nWhat type of wellness tech should I dive into next? Let me know :)\n\n1. @whoop\n2. @lumysi_bracelet\n3. @pixl.robotics\n\nWellness trackers I'd use instead of Oura.\nOura tracks your night. WHOOP tracks your strain. Lumysi tracks your wrist.\nNone of them can see the 8 hours you sit at a desk.\n\nPixl Nub is a tiny desk robot \u2014 radar for focus, interruptions, presence, breathing and heart rate. No camera. No wearable. No subscription. $200 on Kickstarter this October.\n\n#fashiontech #wearabletech #healthtracker #ouraring #futureoffashion #kickstarter",
+    "musicUrl": "https://www.tiktok.com/music/som-original-7649903858499734279",
+    "destination": "draft"
+  },
+  "timing": {
+    "kind": "now"
+  },
+  "status": "active",
+  "runWindowMinutes": 30,
+  "nextRunAt": "2026-09-09T07:29:40.394Z",
+  "createdAt": "2026-09-09T07:29:41.411Z",
+  "updatedAt": "2026-09-09T07:29:41.411Z"
+}

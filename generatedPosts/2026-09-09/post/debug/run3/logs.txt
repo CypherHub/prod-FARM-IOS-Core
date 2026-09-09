@@ -1,0 +1,43 @@
+.env.devices not found. Continuing without it.
+Checking device lock state
+Importing media 4/4: slide-4.jpg
+Importing media 3/4: slide-3.jpg
+Importing media 2/4: slide-2.jpg
+Importing media 1/4: slide-1.jpg
+2026-09-09T07:23:34.704Z INFO @wdio/utils: Connecting to existing driver at http://127.0.0.1:4725/
+Foregrounded com.zhiliaoapp.musically
+TikTok feed is ready
+Switching to TikTok account "@pixl.robotics"
+Tapped Profile tab at (373, 824)
+Tapped Account switcher (attempt 1) at (205, 121)
+Tapped Account switcher (attempt 2) at (205, 121)
+Tapped Account switcher (attempt 3) at (205, 121)
+Tapped Account switcher (attempt 4) at (205, 121)
+Attempt 1/3 failed before reaching the caption screen: Could not open the TikTok account switcher after 4 attempts. OCR saw: 3:24, T, &), Continue, editing, this, post?, @pixl.robotics, /, ?, \, 23, 5, 882, Following, Followers, Likes, PixIRobotics.com, +, &, Sh, 8:00, -, -, <, TikTok, O, Allow, TikTok, to, Access, e, ), >, Keep, Find, contacts, To, connect, with, people, you, know, on, TikTok,, allow, full, !“, access, to, your, contacts, in, your, s, ¢, device, settings., Don't, allow, Open, settings, No, products, yet, ‘o, Qo, X, Home, Friends, Inbox, Profile
+Sent TikTok to background (Home)
+Retrying up to the caption screen (attempt 2/3)
+2026-09-09T07:24:23.156Z INFO @wdio/utils: Connecting to existing driver at http://127.0.0.1:4725/
+Foregrounded com.zhiliaoapp.musically
+TikTok feed is ready
+Switching to TikTok account "@pixl.robotics"
+Tapped Profile tab at (373, 824)
+Already on TikTok account @pixl.robotics
+Opening music URL: https://www.tiktok.com/music/som-original-7649903858499734279
+Attempt 2/3 failed before reaching the caption screen: TikTok control not found: Use this sound
+Sent TikTok to background (Home)
+Retrying up to the caption screen (attempt 3/3)
+2026-09-09T07:24:48.260Z INFO @wdio/utils: Connecting to existing driver at http://127.0.0.1:4725/
+Foregrounded com.zhiliaoapp.musically
+TikTok feed is ready
+Switching to TikTok account "@pixl.robotics"
+Tapped Profile tab at (373, 824)
+Already on TikTok account @pixl.robotics
+Opening music URL: https://www.tiktok.com/music/som-original-7649903858499734279
+Attempt 3/3 failed before reaching the caption screen: TikTok control not found: Use this sound
+Sent TikTok to background (Home)
+/Users/nuzairnuwais/Developer/GitHub/prod-FARM-IOS-Core/src/tiktok/post.ts:61
+    if (!element) throw new Error(`TikTok control not found: ${label}`);
+                        ^
+Error: TikTok control not found: Use this sound
+    at clickOne (/Users/nuzairnuwais/Developer/GitHub/prod-FARM-IOS-Core/src/tiktok/post.ts:61:25)
+Node.js v26.0.0

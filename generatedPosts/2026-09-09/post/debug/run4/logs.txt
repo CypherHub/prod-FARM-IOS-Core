@@ -1,0 +1,8 @@
+.env.devices not found. Continuing without it.
+Checking device lock state
+Importing media 4/4: slide-4.jpg
+Importing media 3/4: slide-3.jpg
+Importing media 2/4: slide-2.jpg
+Importing media 1/4: slide-1.jpg
+2026-09-09T07:29:49.743Z INFO @wdio/utils: Connecting to existing driver at http://127.0.0.1:4725/
+Foregrounded com.zhiliaoapp.musically
