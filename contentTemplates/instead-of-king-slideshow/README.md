@@ -1,10 +1,10 @@
 # Instead-of-king slideshow
 
-Silent 4-slide TikTok rec. Name the category king in the hook, show two peer products, put **your product last** at the best price. Original sound, no voiceover. Type does the selling.
+Silent 4-slide TikTok rec. Name the category king in the hook, show **two** peer products, put **your product last** at the best price. Always four images — never a fifth. Pick the two peers from `peers.json` (taggable brands with handles, prices, and reference stills). Original sound, no voiceover. Type does the selling.
 
 This folder is the template. Each template in `contentTemplates/` is a directory that holds the how-to, the **source** slideshow or video that the pattern came from, and **refs** used to generate new stills.
 
-Worked post: [generatedPosts/2026-09-09/post](../../generatedPosts/2026-09-09/post)
+Worked post: [generatedPosts/2026-09-09/post_001](../../generatedPosts/2026-09-09/post_001)
 
 ## Folder
 
@@ -13,6 +13,7 @@ instead-of-king-slideshow/
   README.md                 this file
   caption.txt               worked Pixl Nub caption (title + body)
   music.txt                 source slideshow sound URL
+  peers.json                taggable peer roster (handles, features, prices)
   source/                   original TikTok slideshow (do not post these)
     slide-1.jpg … slide-4.jpg
     cover.jpg
@@ -21,9 +22,11 @@ instead-of-king-slideshow/
     persona.jpg             narrator FACE for slide 1 only
     slide-4.jpg             real last-slide photo (product in situ)
     product.jpg             same file as slide-4.jpg in this worked example
+    peers/                  product stills for optional peer slides
+      femometer.jpg nowatch.jpg bebedi.jpg clair.jpg ringconn.jpg ultrahuman.jpg
 ```
 
-Source: [@fashion.technically](https://www.tiktok.com/@fashion.technically/video/7665104701272132878) — 605k plays from ~223 followers. Lumysi is slide 4 of someone else’s rec. Full beat analysis: [generatedPosts/2026-09-09/post/analysis.md](../../generatedPosts/2026-09-09/post/analysis.md).
+Source: [@fashion.technically](https://www.tiktok.com/@fashion.technically/video/7665104701272132878) — 605k plays from ~223 followers. Lumysi is slide 4 of someone else’s rec. Full beat analysis: [generatedPosts/2026-09-09/post_001/analysis.md](../../generatedPosts/2026-09-09/post_001/analysis.md).
 
 ## Why it works
 
@@ -58,7 +61,7 @@ All frames are 1080×1920. Cream/gold type (`#F3E2A0`) on lifestyle photos. Bran
 
 ### Caption formula
 
-Mirror the source opener, then one extra argument block. Worked caption is in `caption.txt` in this folder (copied to `generatedPosts/2026-09-09/post/caption.txt` when posting).
+Mirror the source opener, then one extra argument block. Worked caption is in `caption.txt` in this folder (copied to `generatedPosts/2026-09-09/post_001/caption.txt` when posting).
 
 ```
 What do you guys think? Which is your fav?
@@ -87,9 +90,33 @@ Under 2,200 characters. Tag real TikTok handles. Keep the source hashtags that s
 | Role | Pick | Rule |
 |---|---|---|
 | King | | Highest-search incumbent. |
-| Peer 1 | | Same category, easy to pigeonhole. |
-| Peer 2 | | Closer to you than the king, still missing your wedge. |
+| Peer 1 | one row in `peers.json` | Same category, easy to pigeonhole. Must have a real TikTok handle. |
+| Peer 2 | a different row in `peers.json` | Closer to you than the king, still missing your wedge. |
 | You | | Last slide. Best price or Kickstarter. |
+
+The slideshow is always **four** stills (hook + two peers + you). Swapping peers does not add slides. Caption tags those two handles plus `@{you}`.
+
+### Taggable peer roster (2026-09-09)
+
+Apify TikTok + Google + website crawl. Use any two as slides 2–3. Generate lookalikes from `refs/peers/*.jpg` — do not post the reference photos or their logos.
+
+| Brand | Handle | Form | Tracks | Price | Ref |
+|---|---|---|---|---|---|
+| WHOOP | `@whoop` | wrist band | strain, sleep, recovery | $239/year | worked example |
+| Lumysi | `@lumysi_bracelet` | bracelet | sleep, steps, activity | $179 Kickstarter | worked example |
+| Lumia Health | `@wearlumia` | ear cuff | sleep, cycle, ear blood flow | $249 | source slide 2 |
+| Incora Health | `@incorahealth` | earrings | cycle, sleep, recovery, stress | $250 | source slide 3 |
+| Femometer | `@femometer` | ring | cycle, ovulation, sleep, HRV | $160 Ring Air | `refs/peers/femometer.jpg` |
+| NOWATCH | `@thenowatch` | jewelry watch | stress, sleep, activity | from $449, no sub | `refs/peers/nowatch.jpg` |
+| Bèbèdí | `@wearbebedi` | waist beads | temperature, cycle, sleep | waitlist | `refs/peers/bebedi.jpg` |
+| Clair | `@clair_health` | wristband | estrogen, progesterone, LH, FSH | $369, ships Dec 2026 | `refs/peers/clair.jpg` |
+| RingConn | `@ringconn_official` | ring | sleep, HR, SpO2, recovery | $349 Gen 3, no sub | `refs/peers/ringconn.jpg` |
+| Ultrahuman | `@ultrahumanhq` | ring | sleep, recovery, metabolism | $349 Ring AIR, no sub | `refs/peers/ultrahuman.jpg` |
+
+Example recast (still four slides): hook stays Oura → Femometer $160 → NOWATCH from $449 → Pixl Nub $200 Kickstarter. Caption tags `@femometer` `@thenowatch` `@pixl.robotics`.
+
+| Locked asset | File | Rule |
+|---|---|---|
 | Source slide 1 | `source/slide-1.jpg` | Pose, clothing, and background are locked. Do not restage. |
 | Persona | `refs/persona.jpg` | **Who** she is. Face, skin, hair. Must be recognizable as this person. |
 | Slide 4 photo | `refs/slide-4.jpg` | Real product-in-use still. Not a generated “holding” shot. |
@@ -121,7 +148,7 @@ Room: large arched mirror, beige-grey chevron herringbone stone above the
 arch, modern tiled interior in the reflection. No extra people, no text.
 ```
 
-**Slides 2–3** — no face needed. [`fal-ai/flux-pro/v1.1-ultra`](https://fal.ai/models/fal-ai/flux-pro/v1.1-ultra), `aspect_ratio: 9:16`, `raw: true`. Generic lookalikes of the peer form factor. Never render their logo.
+**Slides 2–3** — no face needed. [`fal-ai/flux-pro/v1.1-ultra`](https://fal.ai/models/fal-ai/flux-pro/v1.1-ultra), `aspect_ratio: 9:16`, `raw: true`. Generic lookalikes of the peer form factor from `refs/peers/*.jpg` (or the source stills for Lumia / Incora). Never render their logo. Never post the reference JPEG as a slide.
 
 **Slide 4** — do not generate. Crop `refs/slide-4.jpg` to 1080×1920 and composite the overlay. The worked example is a desk still: off-white cross-legged Pixl Nub, a hand with red nails resting on its head, silver laptop, dark textured wall, warm lamp.
 
@@ -141,7 +168,7 @@ The repo has `sharp` for this.
 
 ### 5. Save stills, then post as a draft
 
-Write four 1080×1920 stills plus caption into `generatedPosts/{YYYY-MM-DD}/post/`. Copy `caption.txt` and `music.txt` from this template folder:
+Write four 1080×1920 stills plus caption into `generatedPosts/{YYYY-MM-DD}/post_NNN/` (next unused number that day, three digits: `post_001`, `post_002`, …). Copy `caption.txt` and `music.txt` from this template folder:
 
 ```
 slide-1.jpg … slide-4.jpg

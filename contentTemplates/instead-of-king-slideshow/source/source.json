@@ -63,6 +63,8 @@
     "slide1": "Hook overlay: Health Trackers I'd wear instead of Oura Ring / (as a woman who tracks emerging fashion tech for a living)",
     "slide2": "Lumia Health ear cuff \u2014 sleep, menstrual cycle via ear blood flow \u2014 $249",
     "slide3": "Incora Health earrings \u2014 biomarkers, cycle, sleep, recovery, stress, activity \u2014 $250",
-    "slide4": "Lumysi Bracelets \u2014 stylish health tracking \u2014 sleep, steps, activity \u2014 $179 on Kickstarter"
+    "slide4": "Lumysi Bracelets \u2014 stylish health tracking \u2014 sleep, steps, activity \u2014 $179 on Kickstarter",
+    "slideCount": 4,
+    "peerRoster": "../peers.json"
   }
 }
