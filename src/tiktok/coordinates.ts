@@ -27,13 +27,13 @@ export const DEVICE_COORDINATES = {
     iphonexr: {
         passcodeKeypad: { columnX: [92, 206, 322], rowY: [370, 471, 572, 672] },
         tiktok: {
-            profileTab: { x: 373, y: 824 }, homeTab: { x: 41, y: 824 }, accountSwitcher: { x: 207, y: 212 },
+            profileTab: { x: 373, y: 824 }, homeTab: { x: 41, y: 824 }, accountSwitcher: { x: 211, y: 121 },
             create: { x: 207, y: 824 }, upload: { x: 40, y: 832 },
             // Fallback only — post.ts OCR-taps PHOTO. 268 is TEXT when PHOTO is already selected.
             photoMode: { x: 268, y: 652 }, photosAlbum: { x: 186, y: 122 }, selectMultiple: { x: 26, y: 830 },
             useLayout: { x: 26, y: 657 }, title: { x: 91, y: 235 },
             picker: { circleX: 122, columnStep: 138, firstY: 270, trayY: 270, rowStep: 139, cellX: 68, cellStep: 168, cellY: 707 },
-            pickerNext: { x: 306, y: 829 }, editorNext: { x: 306, y: 856 }, caption: { x: 160, y: 276 },
+            pickerNext: { x: 306, y: 829 }, editorNext: { x: 286, y: 826 }, caption: { x: 160, y: 276 },
             keyboardBack: { x: 24, y: 56 }, draft: { x: 108, y: 846 }, finish: { x: 306, y: 846 },
             like: { x: 380, y: 480 }, save: { x: 380, y: 605 }, swipe: { x: 207, startY: 720, endY: 200, durationMs: 450 },
         },

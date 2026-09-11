@@ -118,7 +118,7 @@ export const DEVICE_COORDINATES = {
         tiktok: {
             profileTab: { x: 373, y: 824 },
             homeTab: { x: 41, y: 824 },
-            accountSwitcher: { x: 207, y: 212 },
+            accountSwitcher: { x: 211, y: 121 },
             create: { x: 207, y: 824 },
             // Gallery thumbnail to the right of the red record button on the
             // create camera (measured 2026-09-09 from a live XR screenshot).
@@ -149,7 +149,7 @@ export const DEVICE_COORDINATES = {
                 cellY: 707,
             },
             pickerNext: { x: 306, y: 829 },
-            editorNext: { x: 306, y: 856 },
+            editorNext: { x: 286, y: 826 },
             caption: { x: 160, y: 276 },
             keyboardBack: { x: 24, y: 56 },
             draft: { x: 108, y: 846 },
