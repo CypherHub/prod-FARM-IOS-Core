@@ -11,7 +11,6 @@ import { switchTikTokAccount, tapCoordinate } from './actions.js';
 import { pointFromWord, recognizeWords } from './ocr.js';
 import { SELECT_MULTIPLE_SELECTORS } from './checkbox.js';
 import { recentPickerTargets, pickerCircle, type PickerLayout } from './post-layout.js';
-import { matchSlidesInPicker, slideCropTemplates } from './picker-match.js';
 import { splitComposerCopy } from './post-compose.js';
 import { redCheckboxPixelCount } from './pixel.js';
 
@@ -97,6 +96,9 @@ const GOT_IT_SELECTORS = [
 const USE_SOUND_SELECTORS = [
     '-ios predicate string:(label CONTAINS[c] "Use this sound") OR (name CONTAINS[c] "Use this sound") OR (label CONTAINS[c] "Use sound") OR (name CONTAINS[c] "Use sound")',
 ];
+const PHOTOS_FILTER_SELECTORS = [
+    '-ios predicate string:(label == "Photos") OR (name == "Photos")',
+];
 
 async function dismissComposerBlockers(driver: Browser): Promise<void> {
     await dismissIfPresent(driver, "Don't allow", DONT_ALLOW_SELECTORS);
@@ -153,6 +155,10 @@ async function waitUntilFeedReady(driver: Browser, remote: WdaRemoteControl, udi
         if (text.includes('everyone can view') || text.includes('descriptionideas') || (text.includes('add link') && text.includes('location'))) {
             dismissed = await tapOcrWord(driver, words, scale, ['x'], 'Close leftover composer')
                 || (await tapCoordinate(driver, 24, 56, 'Close leftover composer'), true);
+        }
+        if (text.includes('select all') && text.includes('cancel') && text.includes('draft')) {
+            dismissed = await tapOcrWord(driver, words, scale, ['cancel'], 'Close leftover drafts list')
+                || (await tapCoordinate(driver, 24, 56, 'Close leftover drafts list'), true);
         }
         if (['finding content', 'choose your', 'interests', 'swipe up', 'find contacts', 'continue editing'].some((token) => text.includes(token))) {
             console.log(`TikTok still blocked/onboarding (${attempt}/12)`);
@@ -352,23 +358,31 @@ async function ensureSelectMultipleOn(
     await debugShot('select-multiple-on');
 }
 
-async function showPhotosAlbum(
+async function showPhotosFilter(
     driver: Browser,
     remote: WdaRemoteControl,
     udid: string,
-    point: { x: number; y: number },
+    fallback: { x: number; y: number },
 ): Promise<void> {
-    const { scale } = await remote.getScreenInfo(udid);
-    const words = await recognizeWords(await remote.getScreenshot(udid));
-    const photos = words.find((word) => word.text.toLowerCase().replace(/[’]/g, "'") === 'photos');
-    if (photos) {
-        const tapped = pointFromWord(photos, scale);
-        await tapCoordinate(driver, tapped.x, tapped.y, 'Photos album');
+    const element = await firstDisplayed(driver, PHOTOS_FILTER_SELECTORS);
+    if (element) {
+        await element.click();
+        console.log('Tapped Photos filter (accessibility)');
     } else {
-        await tapCoordinate(driver, point.x, point.y, 'Photos album');
+        const { scale } = await remote.getScreenInfo(udid);
+        const words = await recognizeWords(await remote.getScreenshot(udid));
+        const photos = words
+            .filter((word) => word.text.toLowerCase().replace(/[’]/g, "'") === 'photos')
+            .sort((left, right) => left.x - right.x);
+        if (photos[0]) {
+            const point = pointFromWord(photos[0], scale);
+            await tapCoordinate(driver, point.x, point.y, 'Photos filter');
+        } else {
+            await tapCoordinate(driver, fallback.x, fallback.y, 'Photos filter');
+        }
     }
-    await driver.pause(1000);
-    await debugShot('photos-album');
+    await driver.pause(800);
+    await debugShot('photos-filter');
 }
 
 async function assertPickerStillOpen(driver: Browser, selected: number, total: number): Promise<void> {
@@ -425,7 +439,6 @@ async function chooseRecentMedia(
     driver: Browser, remote: WdaRemoteControl, udid: string, count: number, assetCount: number,
     coordinates: TikTokCoordinates['tiktok'],
     slideshow: boolean,
-    files: PostManifest['files'],
 ): Promise<void> {
     const latestIndex = assetCount - 1;
     if (slideshow) {
@@ -435,26 +448,18 @@ async function chooseRecentMedia(
                 y: coordinates.selectMultiple.y,
             });
         }
-        await showPhotosAlbum(driver, remote, udid, coordinates.photosAlbum);
+        // Gallery Upload opens Recents / All. Photos excludes videos. The
+        // circled grid under that tab is still newest-first; Cover is the
+        // top-left circled cell after reverse import. Do not tap the Recents
+        // header (album list) or the uncircled strip above firstY.
+        await showPhotosFilter(driver, remote, udid, coordinates.photosAlbum);
         const layout = pickerLayoutFrom(coordinates);
-        const templates = await Promise.all(files.map(async (file) => slideCropTemplates(await readFile(file.path))));
-        for (let selection = 0; selection < count; selection += 1) {
-            const { scale } = await remote.getScreenInfo(udid);
-            const matches = await matchSlidesInPicker(
-                await remote.getScreenshot(udid), templates, layout, scale, 6,
-            );
-            const match = matches[selection];
-            const fallback = count === 1
-                ? pickerCircle(0, 0, layout)
-                : recentPickerTargets(assetCount, count, layout)[selection];
-            const target = match?.target ?? fallback;
-            if (!target) throw new Error(`Could not find slide ${selection + 1} in the photo picker`);
-            if (match) {
-                console.log(`Picker matched slide ${selection + 1} → (${target.x},${target.y})`);
-            } else {
-                console.log(`Picker match missed slide ${selection + 1}; falling back to (${target.x},${target.y})`);
-            }
-            await tapCoordinate(driver, target.x, target.y, `media ${selection + 1}/${count}`);
+        const targets = count === 1
+            ? [pickerCircle(0, 0, layout)]
+            : recentPickerTargets(assetCount, count, layout);
+        console.log(`Picker taps (newest first): ${targets.map((point, index) => `${index + 1}=(${point.x},${point.y})`).join(' ')}`);
+        for (const [selection, { x, y }] of targets.entries()) {
+            await tapCoordinate(driver, x, y, `media ${selection + 1}/${count}`);
             await driver.pause(selection === 0 ? 1400 : 800);
             await debugShot(`media-${selection + 1}-of-${count}`);
             if (selection < count - 1) await assertPickerStillOpen(driver, selection + 1, count);
@@ -602,7 +607,7 @@ for (let attempt = 1; attempt <= REACH_CAPTION_SCREEN_ATTEMPTS && !reachedCaptio
             await debugShot('account-switched');
         }
         await openComposer(driver, tiktokCoordinates, manifest.musicUrl, slideshow);
-        await chooseRecentMedia(driver, deviceRemote, manifest.device.udid, manifest.files.length, assetCount, tiktokCoordinates, slideshow, manifest.files);
+        await chooseRecentMedia(driver, deviceRemote, manifest.device.udid, manifest.files.length, assetCount, tiktokCoordinates, slideshow);
         reachedCaptionScreen = true;
     } catch (error) {
         lastAttemptError = error;

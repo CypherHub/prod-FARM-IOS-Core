@@ -125,7 +125,7 @@ export const DEVICE_COORDINATES = {
             // to the right of the record button; slideshows switch to PHOTO first.
             upload: { x: 40, y: 832 },
             photoMode: { x: 268, y: 652 },
-            photosAlbum: { x: 229, y: 122 },
+            photosAlbum: { x: 186, y: 122 },
             selectMultiple: { x: 26, y: 830 },
             useLayout: { x: 26, y: 657 },
             title: { x: 91, y: 235 },
@@ -206,7 +206,7 @@ export type CalibratablePoint = typeof CALIBRATABLE_POINTS[number];
 
 export const POINT_LABELS: Record<CalibratablePoint, string> = {
     profileTab: 'TikTok: Profile tab', homeTab: 'TikTok: Home tab', accountSwitcher: 'TikTok: Account switcher',
-    create: 'TikTok: Create (+)', upload: 'TikTok: Upload / gallery', photoMode: 'TikTok: PHOTO mode', photosAlbum: 'TikTok: Photos album tab', selectMultiple: 'TikTok: Select multiple', useLayout: 'TikTok: Use layout',
+    create: 'TikTok: Create (+)', upload: 'TikTok: Upload / gallery', photoMode: 'TikTok: PHOTO mode', photosAlbum: 'TikTok: Photos filter tab', selectMultiple: 'TikTok: Select multiple', useLayout: 'TikTok: Use layout',
     pickerNext: 'TikTok: Media picker · Next', editorNext: 'TikTok: Editor · Next', title: 'TikTok: Title field', caption: 'TikTok: Caption field',
     keyboardBack: 'TikTok: Keyboard · back', draft: 'TikTok: Save draft', finish: 'TikTok: Post / Finish',
     like: 'TikTok: Like button', save: 'TikTok: Save/bookmark button',

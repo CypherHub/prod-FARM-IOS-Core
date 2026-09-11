@@ -46,8 +46,8 @@ export function recentPickerTargets(assetCount: number, count: number, layout: P
     if (!Number.isSafeInteger(assetCount) || assetCount < count || count < 1) {
         throw new Error('Photos asset count cannot satisfy the requested media selection');
     }
-    // Circled cells only, reading order, newest-first after reverse import.
-    // Do not tap above firstY — that Recents strip has no circles and opens
-    // a single-image editor. After import, Cover is the top-left circled cell.
+    // Recents circled grid, newest-first, left-to-right then down.
+    // Index 0 is the last imported still (Cover). Index 1 is the one before.
+    // Do not tap above firstY — that Recents strip has no circles.
     return Array.from({ length: count }, (_, index) => pickerCircle(index % 3, Math.floor(index / 3), layout));
 }

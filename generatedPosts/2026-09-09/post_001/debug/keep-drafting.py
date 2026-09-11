@@ -14,7 +14,7 @@ from uuid import uuid4
 UDID = "00008020-000819CA2203002E"
 BASE = "http://127.0.0.1:3000"
 ORIGIN = "http://127.0.0.1:3000"
-ROOT = Path("/Users/nuzairnuwais/Developer/GitHub/prod-FARM-IOS-Core/generatedPosts/2026-09-09/post")
+ROOT = Path("/Users/nuzairnuwais/Developer/GitHub/prod-FARM-IOS-Core/generatedPosts/2026-09-09/post_001")
 SHOTS = ROOT / "debug" / "run7"
 SKIP = (
     "INFO webdriver", "[POST]", "[DELETE]", "[GET]", "DATA {",
