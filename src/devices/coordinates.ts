@@ -125,6 +125,9 @@ export const DEVICE_COORDINATES = {
             // PHOTO-mode gallery thumbnail, bottom-left. VIDEO-mode gallery is
             // to the right of the record button; slideshows switch to PHOTO first.
             upload: { x: 40, y: 832 },
+            // 15s-open position (PHOTO to the right of 15s). When the camera
+            // already opens in PHOTO the pill is ~184 and 268 is TEXT → story.
+            // post.ts OCR-taps the PHOTO word; this is the fallback only.
             photoMode: { x: 268, y: 652 },
             photosAlbum: { x: 186, y: 122 },
             selectMultiple: { x: 26, y: 830 },

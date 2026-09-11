@@ -4,7 +4,7 @@ import test from 'node:test';
 import sharp from 'sharp';
 
 import { assignTopSlideMatches, matchSlidesInPicker, slideCropTemplates } from '../src/tiktok/picker-match.js';
-import { circledPickerCells, pickerCircle, pickerScrollSwipe, type PickerLayout } from '../src/tiktok/post-layout.js';
+import { newestPickerCell, pickerCircle, pickerScrollSwipe, circledPickerCells, type PickerLayout } from '../src/tiktok/post-layout.js';
 
 const layout: PickerLayout = { circleX: 122, columnStep: 138, firstY: 270, trayY: 270, rowStep: 139 };
 
@@ -36,6 +36,7 @@ test('pickerCircle is the top-right selection mark on a Recents cell', () => {
     assert.deepEqual(pickerCircle(0, 1, layout), { x: 122, y: 409 });
     assert.equal(circledPickerCells(layout, 3).length, 9);
     assert.equal(circledPickerCells(layout, 4).length, 12);
+    assert.deepEqual(newestPickerCell(layout), { x: 70, y: 230 });
 });
 
 test('matchSlidesInPicker finds the newest copy of each still', async () => {

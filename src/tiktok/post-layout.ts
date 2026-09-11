@@ -42,6 +42,13 @@ export function pickerScrollSwipe(layout: PickerLayout, direction: 'up' | 'down'
     return { startX: x, startY: upper, endX: x, endY: lower, durationMs: 400 };
 }
 
+// Body of the top-left Recents cell (not the circle). Newest import lands here.
+// Circle is the top-right of that cell; tapping the body with Select multiple
+// off opens the video editor instead of only toggling a checkbox.
+export function newestPickerCell(layout: PickerLayout): PickerTarget {
+    return { x: layout.circleX - 52, y: layout.firstY - 40 };
+}
+
 export function recentPickerTargets(assetCount: number, count: number, layout: PickerLayout): PickerTarget[] {
     if (!Number.isSafeInteger(assetCount) || assetCount < count || count < 1) {
         throw new Error('Photos asset count cannot satisfy the requested media selection');
