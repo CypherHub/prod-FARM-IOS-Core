@@ -5,6 +5,7 @@ import os from 'node:os';
 import type { DeviceAutomation, PluginProcessSpecification, TaskExecutionContext } from '../plugin.js';
 import { discoverConnectedDevices, type Device } from '../devices/discovery.js';
 import { loadRegisteredDevices, type RegisteredDevice } from '../devices/registry.js';
+import { coordinatesForProfile } from '../devices/coordinates.js';
 import { passcodeForDevice } from '../devices/secrets.js';
 import { WdaRemoteControl } from '../devices/wda-remote.js';
 import type { ExecutionRow } from '../database/schema.js';
@@ -43,6 +44,7 @@ function deviceAutomation(registered: RegisteredDevice, passcode: string | undef
         deviceUdid: udid,
         wdaUrl: `http://127.0.0.1:${registered.wdaLocalPort ?? Number(process.env.WDA_LOCAL_PORT ?? 8100)}`,
         passcode,
+        passcodeKeypadLayout: coordinatesForProfile(registered.coordinateProfile).passcodeKeypad,
     });
     const appRequest = async (pathname: string, bundleId: string): Promise<void> => {
         await remote.request(pathname, {

@@ -10,6 +10,7 @@ export * from './security.js';
 export * from './tiktok-plugin.js';
 export * from './dashboard-theme.js';
 export { activeDevices, loadRegisteredDevices, saveRegisteredDevices } from './devices/registry.js';
+export { passcodeForDevice, setDevicePasscode } from './devices/secrets.js';
 export {
     CALIBRATABLE_POINTS, POINT_LABELS, resolveDeviceCoordinates, validateCoordinateOverrides,
     type CalibratablePoint, type DeviceCoordinateOverrides,

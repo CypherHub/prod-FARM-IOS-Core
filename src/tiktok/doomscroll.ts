@@ -1,6 +1,6 @@
 import { remote, type Browser } from 'webdriverio';
 
-import { loadRegisteredDevices, resolveDeviceCoordinates, WdaRemoteControl } from '@git-agni/phone-farm-core';
+import { loadRegisteredDevices, passcodeForDevice, resolveDeviceCoordinates, WdaRemoteControl } from '@git-agni/phone-farm-core';
 import { coordinateProfile, registeredAccounts } from './runtime-settings.js';
 import { tiktokAppiumCapabilities, foregroundTikTok, backgroundTikTok } from './appium-session.js';
 import { switchTikTokAccount, tapCoordinate } from './actions.js';
@@ -162,6 +162,7 @@ try {
     const remoteControl = new WdaRemoteControl({
         deviceUdid: udid,
         wdaUrl,
+        passcode: await passcodeForDevice(udid),
         passcodeKeypadLayout: coordinates.passcodeKeypad,
     });
     console.log('Checking device lock state');

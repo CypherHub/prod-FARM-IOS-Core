@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { remote, type Browser } from 'webdriverio';
 
-import { loadRegisteredDevices, resolveDeviceCoordinates, WdaRemoteControl } from '@git-agni/phone-farm-core';
+import { loadRegisteredDevices, passcodeForDevice, resolveDeviceCoordinates, WdaRemoteControl } from '@git-agni/phone-farm-core';
 import type { PostManifest } from './post-manifest.js';
 import { type TikTokCoordinates } from './coordinates.js';
 import { tiktokAppiumCapabilities, foregroundTikTok, backgroundTikTok } from './appium-session.js';
@@ -553,6 +553,7 @@ if (switchAccountName && !allowedAccounts.includes(switchAccountName)) {
 
 const deviceRemote = new WdaRemoteControl({
     deviceUdid: manifest.device.udid,
+    passcode: await passcodeForDevice(manifest.device.udid),
     passcodeKeypadLayout: coordinates.passcodeKeypad,
 });
 debugRemote = deviceRemote;

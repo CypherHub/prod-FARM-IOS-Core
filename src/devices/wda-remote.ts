@@ -1,6 +1,9 @@
+import sharp from 'sharp';
+
 import { coordinatesForProfile } from './coordinates.js';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+const SCREEN_ASLEEP_LUMA = 12;
 
 export interface ScreenSize {
     width: number;
@@ -48,6 +51,22 @@ export function passcodeDigitPoint(digit: number, layout: PasscodeKeypadLayout):
         x: layout.columnX[index % 3],
         y: layout.rowY[Math.floor(index / 3)],
     };
+}
+
+/** True when a screenshot is essentially black — the display is off, which `/wda/locked` often misses. */
+export async function screenshotLooksAsleep(png: Buffer): Promise<boolean> {
+    const { data, info } = await sharp(png).resize(32, 32, { fit: 'fill' }).removeAlpha().raw()
+        .toBuffer({ resolveWithObject: true });
+    let sum = 0;
+    const pixels = info.width * info.height;
+    for (let i = 0; i < data.length; i += info.channels) {
+        sum += (data[i]! * 299 + data[i + 1]! * 587 + data[i + 2]! * 114) / 1000;
+    }
+    return sum / pixels < SCREEN_ASLEEP_LUMA;
+}
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 interface WdaPayload<T> {
@@ -125,12 +144,13 @@ export class WdaRemoteControl {
         }
     }
 
-    async request(pathname: string, options: RequestInit = {}): Promise<Response> {
+    async request(pathname: string, options: RequestInit & { timeoutMs?: number } = {}): Promise<Response> {
+        const { timeoutMs = this.timeoutMs, ...fetchOptions } = options;
         let response: Response;
         try {
             response = await this.fetch(`${this.wdaUrl}${pathname}`, {
-                ...options,
-                signal: AbortSignal.timeout(this.timeoutMs),
+                ...fetchOptions,
+                signal: AbortSignal.timeout(timeoutMs),
             });
         } catch (error) {
             throw new RemoteDeviceError(`WebDriverAgent is unavailable: ${errorMessage(error)}`);
@@ -190,36 +210,98 @@ export class WdaRemoteControl {
 
     async unlock(udid: string): Promise<void> {
         this.assertTarget(udid);
-        if (!(await this.isLocked(udid))) return;
+        const reportedLocked = await this.isLocked(udid);
+        const wasAsleep = await screenshotLooksAsleep(await this.getScreenshot(udid));
+        // `/wda/locked` is false on a sleeping Face ID phone, but SpringBoard
+        // still refuses to launch apps. A black screenshot is the reliable signal.
+        if (!reportedLocked && !wasAsleep) return;
         if (!this.passcode) {
             throw new RemoteDeviceError('IOS_PASSCODE is not configured; cannot unlock the device');
         }
-        // WDA's /wda/unlock presses Home twice, which wakes the screen and
-        // surfaces the passcode keypad, but it then waits for the screen to
-        // report unlocked and errors out because a passcode is still required.
-        // That's expected here — the keypad is up, so ignore the error and
-        // move on to entering the passcode.
-        try {
-            await this.request('/wda/unlock', { method: 'POST' });
-        } catch {
-            // ignore — see comment above
+
+        const screen = this.cachedScreenInfo ?? await this.getScreenInfo(udid);
+        const { width, height } = screen.screenSize;
+        await this.wakeDisplay(udid, width, height);
+        if (height >= 800) {
+            // Face ID: swipe up from the home indicator, then wait for Face ID
+            // to fail so the passcode keypad appears.
+            await this.sendPointer(swipeActions({
+                type: 'swipe',
+                startX: Math.round(width / 2),
+                startY: height - 11,
+                endX: Math.round(width / 2),
+                endY: Math.round(height * 0.47),
+                durationMs: 350,
+            }));
+            await delay(2200);
         }
+
+        console.log('Entering device passcode');
         for (const character of this.passcode) {
             const digit = Number(character);
             if (!Number.isInteger(digit) || digit < 0 || digit > 9) {
                 throw new RemoteDeviceError('IOS_PASSCODE must contain only digits');
             }
             const { x, y } = passcodeDigitPoint(digit, this.passcodeKeypadLayout);
-            await this.request('/wda/absolute-actions', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ actions: tapActions({ type: 'tap', x, y }) }),
-            });
-            await new Promise((resolve) => setTimeout(resolve, 250));
+            await this.sendPointer(tapActions({ type: 'tap', x, y }));
+            await delay(250);
         }
-        if (await this.isLocked(udid)) {
+        await delay(600);
+        if (await screenshotLooksAsleep(await this.getScreenshot(udid))) {
+            try {
+                await this.request('/wda/pressButton', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ name: 'home' }),
+                    timeoutMs: 2_000,
+                });
+            } catch {
+                // ignore
+            }
+            await delay(400);
+        }
+        if (await screenshotLooksAsleep(await this.getScreenshot(udid))) {
             throw new RemoteDeviceError('Device is still locked after entering the passcode');
         }
+    }
+
+    private async wakeDisplay(udid: string, width: number, height: number): Promise<void> {
+        console.log('Waking device');
+        // Synthetic taps do not wake a sleeping Face ID phone. Home does (it
+        // maps to the home-indicator gesture). `/wda/unlock` waits for
+        // SpringBoard to report unlocked and times out on a passcode screen.
+        try {
+            await this.request('/wda/pressButton', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ name: 'home' }),
+                timeoutMs: 2_000,
+            });
+        } catch {
+            // fall through
+        }
+        await delay(400);
+        if (!await screenshotLooksAsleep(await this.getScreenshot(udid))) return;
+        try {
+            await this.request('/wda/unlock', { method: 'POST', timeoutMs: 2_000 });
+        } catch {
+            // keypad still required
+        }
+        await delay(300);
+        if (!await screenshotLooksAsleep(await this.getScreenshot(udid))) return;
+        await this.sendPointer(tapActions({ type: 'tap', x: Math.round(width / 2), y: Math.round(height / 2) }));
+        for (let i = 0; i < 8; i += 1) {
+            if (!await screenshotLooksAsleep(await this.getScreenshot(udid))) return;
+            await delay(200);
+        }
+    }
+
+    private async sendPointer(actions: W3cPointerSource[]): Promise<void> {
+        await this.request('/wda/absolute-actions', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ actions }),
+        });
     }
 
     async performAction(udid: string, action: RemoteAction): Promise<void> {

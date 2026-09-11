@@ -25,7 +25,7 @@ export const DEVICE_COORDINATES = {
     },
     // iPhone XR / 11 (414 × 896 pt). Keep in sync with src/devices/coordinates.ts.
     iphonexr: {
-        passcodeKeypad: { columnX: [114, 211, 304], rowY: [296, 466, 571, 680] },
+        passcodeKeypad: { columnX: [92, 206, 322], rowY: [370, 471, 572, 672] },
         tiktok: {
             profileTab: { x: 373, y: 824 }, homeTab: { x: 41, y: 824 }, accountSwitcher: { x: 207, y: 212 },
             create: { x: 207, y: 824 }, upload: { x: 40, y: 832 }, photoMode: { x: 268, y: 652 }, photosAlbum: { x: 186, y: 122 }, selectMultiple: { x: 26, y: 830 },

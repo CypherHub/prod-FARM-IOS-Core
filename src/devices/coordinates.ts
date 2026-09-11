@@ -111,8 +111,9 @@ export const DEVICE_COORDINATES = {
         productTypes: ['iPhone11,8', 'iPhone12,1'],
         screenSize: { width: 414, height: 896 },
         passcodeKeypad: {
-            columnX: [114, 211, 304],
-            rowY: [296, 466, 571, 680],
+            // Measured 2026-09-11 from an iPhone XR lock-screen screenshot (414×896 pt).
+            columnX: [92, 206, 322],
+            rowY: [370, 471, 572, 672],
         },
         tiktok: {
             profileTab: { x: 373, y: 824 },
