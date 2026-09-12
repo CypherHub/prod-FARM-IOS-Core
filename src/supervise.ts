@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -145,8 +145,15 @@ export class FarmSupervisor {
         this.resolveFinished(this.failsafeReason ? 1 : 0);
     }
 
+    private readonly PROCESS_PORTS: Record<string, string> = {
+        web: '3000',
+        appium: '4725',
+    };
+
     private launch(name: string): void {
         if (this.stopping) return;
+        // Before spawning, free the process's designated port if it's held by an orphan.
+        this.freePort(name);
         const id = (this.generation.get(name) ?? 0) + 1;
         this.generation.set(name, id);
         const startedAt = this.now();
@@ -192,6 +199,54 @@ export class FarmSupervisor {
         });
     }
 
+    private freePort(name: string): void {
+        const port = this.PROCESS_PORTS[name];
+        if (!port) return;
+        try {
+            const output = execSync(`lsof -ti tcp:${port} -s TCP:LISTEN 2>/dev/null`, {
+                encoding: 'utf8',
+                timeout: 5_000,
+            }).trim();
+            if (!output) return;
+            const pids = output.split('\n').map((s) => Number.parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n));
+            for (const pid of pids) {
+                try {
+                    process.kill(pid, 'SIGTERM');
+                    this.write('stdout', `[${name}] freed port ${port} from orphaned pid ${pid}\n`);
+                } catch {
+                    // Already gone.
+                }
+            }
+        } catch {
+            // lsof not available or nothing listening.
+        }
+    }
+
+    private async killOrphanedFarmProcesses(): Promise<void> {
+        // Kill orphaned processes holding farm ports that would cause EADDRINUSE.
+        const ports = ['3000', '4725'];
+        for (const port of ports) {
+            try {
+                const output = execSync(`lsof -ti tcp:${port} -s TCP:LISTEN 2>/dev/null`, {
+                    encoding: 'utf8',
+                    timeout: 5_000,
+                }).trim();
+                if (!output) continue;
+                const pids = output.split('\n').map((s) => Number.parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n));
+                for (const pid of pids) {
+                    try {
+                        process.kill(pid, 'SIGTERM');
+                        this.write('stdout', `Killed orphaned process holding port ${port} (pid ${pid})\n`);
+                    } catch {
+                        // Already gone or permission denied.
+                    }
+                }
+            } catch {
+                // lsof not available or no process listening on this port.
+            }
+        }
+    }
+
     private async stopAll(): Promise<void> {
         const running = [...this.children.entries()];
         this.children.clear();
@@ -220,6 +275,12 @@ export class FarmSupervisor {
             if (Number.isInteger(holder) && processAlive(holder)) {
                 throw new Error(`Farm supervisor already running (pid ${holder})`);
             }
+            // Stale lock: old supervisor died without cleaning up.
+            // Kill orphaned farm subprocesses that may hold ports.
+            this.write('stdout', `Stale lock detected (pid ${Number.isInteger(holder) ? holder : 'unknown'}); cleaning up orphaned processes\n`);
+            await this.killOrphanedFarmProcesses();
+            // Give processes a moment to release ports before we re-create the lock.
+            await this.wait(1_000);
             await rm(this.lockPath, { recursive: true, force: true });
             await mkdir(this.lockPath, { mode: 0o700 });
         }
