@@ -27,6 +27,8 @@ const RATE_LIMIT_PATTERNS = [
     /resource exhausted/i,
     /too many requests/i,
     /request.*failed.*status.*429/i,
+    /hit your (weekly|daily|monthly) limit/i,
+    /api_error_status.*429/i,
 ];
 
 function isRateLimit(error: Error): boolean {
