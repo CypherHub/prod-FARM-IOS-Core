@@ -53,7 +53,7 @@ const FINISH_X = 306;
 const FINISH_Y = 846;
 
 // Placeholder music URL — replaceable from the library bookmark page
-const MUSIC_URL = 'https://www.tiktok.com/music/original-sound-7018355359623482120';
+const MUSIC_URL = 'https://www.tiktok.com/music/original-sound-7611027491582659344';
 
 // === Helper: generate a 4-step tap+check block ===
 // skipSteps=0 means gate mode (NO stops replay)

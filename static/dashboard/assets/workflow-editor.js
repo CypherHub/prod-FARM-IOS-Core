@@ -38,6 +38,8 @@ let screenHeight = 0;
 let streamInterval = null;
 async function request(url, options) {
     const response = await fetch(url, options);
+    if (response.status === 204)
+        return undefined;
     const body = await response.json();
     if (!response.ok)
         throw new Error(body.error ?? `Request failed (${response.status})`);
@@ -283,9 +285,7 @@ async function updateSelectedStep() {
     if (!selectedStepId || !detailStepType)
         return;
     const body = {};
-    const label = stepLabel.value.trim();
-    if (label)
-        body.label = label;
+    body.label = stepLabel.value ?? '';
     const x = (document.querySelector('#dt-x'))?.value;
     const y = (document.querySelector('#dt-y'))?.value;
     const endX = (document.querySelector('#dt-endX'))?.value;
@@ -322,13 +322,15 @@ async function updateSelectedStep() {
         body: JSON.stringify(body),
     });
     await reloadWorkflow();
+    // Re-select the step to refresh the detail panel with server-confirmed values
+    selectStep(selectedStepId);
 }
 async function deleteSelectedStep() {
     if (!selectedStepId)
         return;
     if (!window.confirm('Delete this step?'))
         return;
-    await fetch(`/api/workflow-steps/${selectedStepId}`, { method: 'DELETE' });
+    await request(`/api/workflow-steps/${selectedStepId}`, { method: 'DELETE' });
     selectedStepId = null;
     stepDetail.style.display = 'none';
     await reloadWorkflow();
@@ -533,7 +535,23 @@ screenImg.addEventListener('pointerdown', (e) => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ type: 'tap', x: rawX, y: rawY }),
     }).catch(() => { });
-    // Add a tap step
+    // Check if a tap step is selected in the detail panel — update its coordinates
+    if (selectedStepId && detailStepType === 'tap') {
+        const step = workflow.steps.find((s) => s.id === selectedStepId);
+        if (step) {
+            fetch(`/api/workflow-steps/${selectedStepId}`, {
+                method: 'PATCH',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ x: rawX, y: rawY, label: step.label || `Recorded tap (${rawX}, ${rawY})` }),
+            })
+                .then((r) => r.json())
+                .then(() => reloadWorkflow())
+                .then(() => selectStep(selectedStepId))
+                .catch(() => { });
+            return;
+        }
+    }
+    // Otherwise, add a new tap step
     fetch(`${API}/${workflowId}/steps`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
