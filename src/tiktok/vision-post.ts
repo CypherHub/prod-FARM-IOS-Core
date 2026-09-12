@@ -65,6 +65,7 @@ export async function runVideoVisionPost(context: VideoVisionContext): Promise<v
 async function fillCaption(context: VideoVisionContext): Promise<void> {
     const { title, caption } = splitComposerCopy(context.manifest.caption);
     const copy = [title, caption].filter(Boolean).join('\n\n');
+    const typedCopy = copy ? copy + ' ' : '';
     let typed = !copy;
     let dismissed = !copy;
     for (let attempt = 1; attempt <= ATTEMPTS_PER_GOAL + 2; attempt += 1) {
@@ -80,9 +81,9 @@ async function fillCaption(context: VideoVisionContext): Promise<void> {
                 await applyDecision(context, 'fill_caption', decision, point, attempt);
                 continue;
             }
-            await context.typeKeys(context.driver, copy);
+            await context.typeKeys(context.driver, typedCopy);
             typed = true;
-            console.log(`Caption added: ${copy}`);
+            console.log(`Caption added: ${typedCopy}`);
             await context.debugShot?.('caption-filled');
             await wait(context, 800);
             continue;

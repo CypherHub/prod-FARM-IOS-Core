@@ -157,7 +157,7 @@ test('posts a draft video on the connected phone using the vision guide', { time
 
     const stamp = new Date().toISOString();
     const hook = `${HOOK_PREFIX}\n${stamp}`;
-    const caption = `${HOOK_PREFIX} ${stamp}`;
+    const caption = `${HOOK_PREFIX} ${stamp} `;
     const workDir = await mkdtemp(path.join(os.tmpdir(), 'vision-draft-video-'));
     const stampedVideo = path.join(workDir, 'post.mp4');
     await compositeVideo({
@@ -216,7 +216,7 @@ test('scripted vision guide draws taps on screenshots and keeps a timestamp capt
     const taps: Array<{ x: number; y: number; label?: string }> = [];
     const typed: string[] = [];
     const stamp = '2026-09-12T03:40:00.000Z';
-    const caption = `${HOOK_PREFIX} ${stamp}`;
+    const caption = `${HOOK_PREFIX} ${stamp} `;
     const screenshot = await sharp({
         create: { width: SCREEN.width, height: SCREEN.height, channels: 3, background: '#111111' },
     }).png().toBuffer();
