@@ -34,6 +34,8 @@
     "db:migrate": "node --env-file-if-exists=.env --import tsx src/database/migrate.ts",
     "db:setup": "node --env-file-if-exists=.env --import tsx src/database/setup.ts",
     "gallery:import": "node --env-file-if-exists=.env scripts/import-gallery.mjs",
+    "sync:albums": "node --env-file-if-exists=.env scripts/sync-shared-albums.mjs",
+    "prestart": "node --env-file-if-exists=.env scripts/sync-shared-albums.mjs",
     "worker": "node --env-file-if-exists=.env --env-file-if-exists=.env.devices --import tsx src/scheduler/worker.ts",
     "web": "node --env-file-if-exists=.env --env-file-if-exists=.env.devices --import tsx src/api/server.ts",
     "start": "node --env-file-if-exists=.env --env-file-if-exists=.env.devices --import tsx src/supervise.ts",
