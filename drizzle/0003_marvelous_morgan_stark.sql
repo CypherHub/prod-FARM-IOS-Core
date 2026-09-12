@@ -1,0 +1,1 @@
+ALTER TABLE "scheduler"."bookmark_media" ADD COLUMN "duration_seconds" real;

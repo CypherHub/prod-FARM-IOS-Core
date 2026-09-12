@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Create · Handler</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="/assets/library.css">
+    <style>
+        .steps { display: grid; gap: 20px; }
+        .step { border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 14px; padding: 20px 22px; }
+        .step[aria-disabled="true"] { opacity: 0.45; pointer-events: none; }
+        .step-title { display: flex; align-items: center; gap: 10px; margin: 0 0 4px; }
+        .step-badge { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 999px;
+            background: rgba(255,255,255,0.12); font-size: 0.8rem; flex: none; }
+        .step[data-done="true"] .step-badge { background: var(--success, #42d69d); color: #06231a; }
+        .hook-list { display: grid; gap: 10px; margin: 14px 0; }
+        .hook-option { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start;
+            border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 10px; padding: 12px 14px; cursor: pointer; }
+        .hook-option:has(input:checked) { border-color: var(--accent, #ff365e); background: rgba(255,255,255,0.05); }
+        .hook-option pre { margin: 0; font: inherit; white-space: pre-wrap; }
+        .hook-option .tag { font-size: 0.68rem; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.06em; }
+        .batch { display: grid; gap: 14px; margin-top: 16px; }
+        .batch-card { border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 12px; padding: 16px 18px; }
+        .batch-card header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 10px; }
+        .batch-card .hook { font-weight: 600; }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <a class="brand-name" href="/">iOS Farm</a>
+                <a class="brand-by" href="https://gethandler.ai" target="_blank" rel="noopener">by Handler</a>
+            </div>
+            <nav class="topbar-nav">
+                <a class="button secondary" href="/">Devices</a>
+                <a class="button secondary" href="/tasks">Tasks</a>
+                <a class="button secondary" href="/schedule">Schedule</a>
+                <a class="button primary" href="/library">Library</a>
+                <a class="button secondary" href="/library/gallery">Gallery</a>
+            </nav>
+        </div>
+    </header>
+    <main class="shell">
+        <header class="page-header">
+            <div>
+                <span class="eyebrow"><a id="back" href="/library">← Template</a></span>
+                <h1>Create content</h1>
+                <p id="subtitle">Write hooks, choose the ones worth building, then generate.</p>
+            </div>
+        </header>
+        <p id="page-error" class="status error" hidden></p>
+
+        <div class="steps">
+            <section class="step" id="step-1">
+                <h2 class="step-title"><span class="step-badge">1</span>Write the hooks</h2>
+                <p class="field-help">The hook is the on-screen text. Ask for suggestions, write your own, or both.</p>
+                <div class="split">
+                    <div class="field">
+                        <label for="gallery">Gallery</label>
+                        <select id="gallery"></select>
+                        <p class="field-help" id="gallery-help"></p>
+                    </div>
+                    <div class="field">
+                        <label for="prompt">Extra instructions (optional)</label>
+                        <textarea id="prompt" rows="3" placeholder="e.g. lean funnier, mention the Kickstarter price"></textarea>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="button primary" id="suggest" type="button">Suggest 5 hooks</button>
+                </div>
+                <div id="hook-status"></div>
+            </section>
+
+            <section class="step" id="step-2">
+                <h2 class="step-title"><span class="step-badge">2</span>Pick the ones to build</h2>
+                <div id="hooks"><p class="field-help">Suggest hooks above, or write your own below.</p></div>
+                <div class="field wide">
+                    <label for="custom">Write your own hook</label>
+                    <textarea id="custom" rows="2" placeholder="Type a hook and press Add"></textarea>
+                    <div class="form-actions"><button class="button secondary" id="add" type="button">Add hook</button></div>
+                </div>
+            </section>
+
+            <section class="step" id="step-3">
+                <h2 class="step-title"><span class="step-badge">3</span>Build</h2>
+                <div class="split">
+                    <div class="field" id="clip-field">
+                        <label for="clip">Source clip</label>
+                        <select id="clip"><option value="">Let the AI pick</option></select>
+                        <p class="field-help" id="clip-help"></p>
+                    </div>
+                    <div class="field">
+                        <label for="target">Post to</label>
+                        <select id="target"></select>
+                        <p class="field-help">Drafts are queued to this device and account.</p>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="button primary" id="create" type="button" disabled>Create videos</button>
+                </div>
+                <div class="batch" id="batch"></div>
+            </section>
+        </div>
+    </main>
+    <footer class="app-footer"></footer>
+
+    <script type="module">
+        import {
+            deviceOptions, duration, element, escapeHtml, galleryOptions, jsonRequest,
+            loadDevices, loadGalleries, param, showError,
+        } from '/assets/library-shared.js';
+
+        const bookmarkId = param('bookmark');
+        const el = {
+            back: element('#back'), subtitle: element('#subtitle'), error: element('#page-error'),
+            gallery: element('#gallery'), galleryHelp: element('#gallery-help'), prompt: element('#prompt'),
+            suggest: element('#suggest'), hookStatus: element('#hook-status'), hooks: element('#hooks'),
+            custom: element('#custom'), add: element('#add'),
+            clipField: element('#clip-field'), clip: element('#clip'), clipHelp: element('#clip-help'),
+            target: element('#target'), create: element('#create'), batch: element('#batch'),
+            step1: element('#step-1'), step2: element('#step-2'), step3: element('#step-3'),
+        };
+
+        // Hooks are objects so a custom one can be labelled and identity is stable
+        // across re-renders — the selection lives on the object, not on an index.
+        const state = {
+            bookmark: null, galleries: [], devices: [], clips: [], targetSeconds: null,
+            hooks: [], hookRunId: null, busy: false, generationIds: [],
+        };
+
+        el.back.href = `/library/bookmarks/${encodeURIComponent(bookmarkId)}`;
+
+        function selectedHooks() { return state.hooks.filter((hook) => hook.selected); }
+
+        /** Only the count and the button change on a tick, so the list is never rebuilt. */
+        function refreshCreateButton() {
+            const count = selectedHooks().length;
+            el.create.textContent = count ? `Create ${count} ${count === 1 ? 'video' : 'videos'}` : 'Create videos';
+            el.create.disabled = count === 0 || state.bookmark?.status !== 'ready';
+            el.step2.dataset.done = String(count > 0);
+        }
+
+        function renderHooks() {
+            if (state.hooks.length === 0) {
+                el.hooks.innerHTML = '<p class="field-help">Suggest hooks above, or write your own below.</p>';
+                refreshCreateButton();
+                return;
+            }
+            el.hooks.innerHTML = `<div class="hook-list">${state.hooks.map((hook, index) => `
+                <label class="hook-option">
+                    <input type="checkbox" data-index="${index}" ${hook.selected ? 'checked' : ''}>
+                    <span>${hook.custom ? '<span class="tag">yours</span><br>' : ''}<pre>${escapeHtml(hook.text)}</pre></span>
+                </label>`).join('')}</div>`;
+            for (const box of el.hooks.querySelectorAll('[data-index]')) {
+                box.addEventListener('change', () => {
+                    // Mutate state and update the count only. Rebuilding the list
+                    // here would detach the very checkbox being clicked.
+                    state.hooks[Number(box.dataset.index)].selected = box.checked;
+                    refreshCreateButton();
+                });
+            }
+            refreshCreateButton();
+        }
+
+        function addHook(text, custom = false) {
+            const clean = String(text).split('\n').map((line) => line.trim()).filter(Boolean).join('\n');
+            if (!clean || state.hooks.some((hook) => hook.text === clean)) return;
+            const entry = { text: clean, custom, selected: custom };
+            if (custom) state.hooks.unshift(entry); else state.hooks.push(entry);
+        }
+
+        async function refreshClips() {
+            const gallery = el.gallery.value;
+            state.clips = [];
+            if (state.bookmark?.kind === 'video' && gallery) {
+                try {
+                    const { items } = await jsonRequest(`/api/gallery/${encodeURIComponent(gallery)}`);
+                    state.clips = items.filter((item) => item.kind === 'video'
+                        && typeof item.durationSeconds === 'number'
+                        && item.durationSeconds >= (state.targetSeconds ?? 0));
+                } catch { state.clips = []; }
+            }
+            el.clip.innerHTML = `<option value="">Let the AI pick</option>${state.clips.map((clip) =>
+                `<option value="${escapeHtml(clip.name)}">${escapeHtml(clip.name)} · ${duration(clip.durationSeconds)}</option>`).join('')}`;
+            el.clipHelp.textContent = state.clips.length === 0
+                ? `No clip in this gallery is long enough for the ${duration(state.targetSeconds) || 'reference'} template.`
+                : 'Every video in the batch is trimmed from this clip, each at its own offset.';
+        }
+
+        async function init() {
+            try {
+                state.bookmark = await jsonRequest(`/api/bookmarks/${bookmarkId}`);
+            } catch (error) { showError(el.error, error); return; }
+
+            const kind = state.bookmark.kind;
+            state.targetSeconds = state.bookmark.media?.find((row) => row.role === 'video')?.durationSeconds ?? null;
+            el.subtitle.textContent = kind === 'video'
+                ? `Building ${duration(state.targetSeconds)} videos from @${state.bookmark.authorName}'s template.`
+                : `Building slideshows from @${state.bookmark.authorName}'s template.`;
+
+            [state.galleries, state.devices] = await Promise.all([loadGalleries(), loadDevices()]);
+            el.gallery.innerHTML = galleryOptions(state.galleries, kind);
+            el.galleryHelp.textContent = kind === 'video'
+                ? 'The video is trimmed from one clip in this gallery.'
+                : 'Slides are built from the images in this gallery.';
+            el.target.innerHTML = deviceOptions(state.devices) || '<option value="">No device accounts configured</option>';
+
+            // A slideshow has no source clip to choose.
+            el.clipField.hidden = kind !== 'video';
+            await refreshClips();
+            renderHooks();
+        }
+
+        el.gallery.addEventListener('change', () => void refreshClips());
+
+        el.suggest.addEventListener('click', async () => {
+            if (state.busy) return;
+            state.busy = true;
+            el.suggest.disabled = true;
+            el.suggest.textContent = 'Writing hooks…';
+            el.hookStatus.innerHTML = '<div class="loading-card"><span class="spinner"></span>Claude is writing hooks…</div>';
+            showError(el.error, null);
+            try {
+                const run = await jsonRequest(`/api/bookmarks/${bookmarkId}/hooks`, {
+                    method: 'POST', body: JSON.stringify({ prompt: el.prompt.value }),
+                });
+                state.hookRunId = run.id;
+                await pollHooks(run.id);
+            } catch (error) {
+                showError(el.error, error);
+                finishSuggest();
+            }
+        });
+
+        function finishSuggest() {
+            state.busy = false;
+            el.suggest.disabled = false;
+            el.suggest.textContent = state.hooks.length ? 'Suggest 5 more' : 'Suggest 5 hooks';
+            el.hookStatus.innerHTML = '';
+        }
+
+        async function pollHooks(id) {
+            const run = await jsonRequest(`/api/hook-runs/${id}`);
+            if (run.status === 'pending' || run.status === 'generating') {
+                setTimeout(() => void pollHooks(id).catch((error) => { showError(el.error, error); finishSuggest(); }), 3000);
+                return;
+            }
+            if (run.status === 'failed') showError(el.error, new Error(run.error ?? 'Hook suggestion failed'));
+            for (const hook of run.hooks ?? []) addHook(hook);
+            el.step1.dataset.done = String((run.hooks ?? []).length > 0);
+            renderHooks();
+            finishSuggest();
+        }
+
+        el.add.addEventListener('click', () => {
+            const text = el.custom.value.trim();
+            if (!text) return;
+            addHook(text, true);
+            el.custom.value = '';
+            renderHooks();
+        });
+
+        el.create.addEventListener('click', async () => {
+            showError(el.error, null);
+            el.create.disabled = true;
+            const [deviceUdid, account] = (el.target.value || '').split('|');
+            try {
+                const { generations } = await jsonRequest(`/api/bookmarks/${bookmarkId}/generate`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        gallery: el.gallery.value,
+                        prompt: el.prompt.value,
+                        hooks: selectedHooks().map((hook) => hook.text),
+                        galleryVideo: el.clip.value || undefined,
+                        hookRunId: state.hookRunId || undefined,
+                        deviceUdid, account,
+                    }),
+                });
+                state.generationIds = generations.map((generation) => generation.id);
+                el.step3.dataset.done = 'true';
+                renderBatch();
+                for (const id of state.generationIds) void watch(id);
+            } catch (error) {
+                showError(el.error, error);
+                refreshCreateButton();
+            }
+        });
+
+        const batchState = new Map();
+
+        function renderBatch() {
+            el.batch.innerHTML = state.generationIds.map((id) => {
+                const generation = batchState.get(id);
+                return `<article class="batch-card" id="gen-${id}">
+                    <header>
+                        <span class="hook">${escapeHtml(generation?.hook?.split('\n')[0] ?? 'Queued')}</span>
+                        <span class="status ${escapeHtml(generation?.status ?? 'pending')}">${escapeHtml(generation?.status ?? 'pending')}</span>
+                    </header>
+                    <div class="body"></div>
+                </article>`;
+            }).join('');
+            for (const id of state.generationIds) {
+                const generation = batchState.get(id);
+                if (generation) renderGeneration(generation, el.batch.querySelector(`#gen-${CSS.escape(id)} .body`));
+            }
+        }
+
+        function renderGeneration(generation, host) {
+            if (!host) return;
+            if (generation.status === 'pending' || generation.status === 'generating') {
+                host.innerHTML = '<div class="loading-card"><span class="spinner"></span>Building…</div>';
+                return;
+            }
+            if (generation.status === 'failed') {
+                host.innerHTML = `<p class="status error">${escapeHtml(generation.error || 'Generation failed')}</p>`;
+                return;
+            }
+            const media = generation.video
+                ? `<figure><video src="/api/generations/${generation.id}/slides/${generation.video}" controls playsinline preload="metadata"></video></figure>`
+                : (generation.slides ?? []).map((name) =>
+                    `<figure><img src="/api/generations/${generation.id}/slides/${name}" alt="${escapeHtml(name)}" loading="lazy"></figure>`).join('');
+            const queued = generation.status === 'queued';
+            host.innerHTML = `
+                <div class="slide-grid">${media}</div>
+                <div class="field wide">
+                    <label>Caption</label>
+                    <textarea class="caption-box" data-caption ${queued ? 'disabled' : ''}>${escapeHtml(generation.caption || '')}</textarea>
+                    <p class="field-help">First line becomes the TikTok title; leave a blank line before the body.</p>
+                </div>
+                <div class="form-actions">
+                    <button class="button secondary" type="button" data-save ${queued ? 'disabled' : ''}>Save caption</button>
+                    <button class="button primary" type="button" data-queue ${queued ? 'disabled' : ''}>${queued ? 'Queued as draft' : 'Queue draft to device'}</button>
+                </div>
+                <p class="status error" data-error hidden></p>`;
+
+            const errorNode = host.querySelector('[data-error]');
+            const caption = () => host.querySelector('[data-caption]').value;
+            host.querySelector('[data-save]')?.addEventListener('click', async () => {
+                showError(errorNode, null);
+                try {
+                    await jsonRequest(`/api/generations/${generation.id}`, { method: 'PATCH', body: JSON.stringify({ caption: caption() }) });
+                } catch (error) { showError(errorNode, error); }
+            });
+            host.querySelector('[data-queue]')?.addEventListener('click', async () => {
+                showError(errorNode, null);
+                try {
+                    await jsonRequest(`/api/generations/${generation.id}`, { method: 'PATCH', body: JSON.stringify({ caption: caption() }) });
+                    await jsonRequest(`/api/generations/${generation.id}/queue`, { method: 'POST', body: JSON.stringify({}) });
+                    void watch(generation.id);
+                } catch (error) { showError(errorNode, error); }
+            });
+        }
+
+        async function watch(id) {
+            try {
+                const generation = await jsonRequest(`/api/generations/${id}`);
+                batchState.set(id, generation);
+                renderBatch();
+                if (generation.status === 'pending' || generation.status === 'generating') setTimeout(() => void watch(id), 4000);
+            } catch { /* the bookmark may have been deleted; stop quietly */ }
+        }
+
+        // Deep link from the template page straight to one generation.
+        const existing = param('generation');
+        if (existing) { state.generationIds = [existing]; void watch(existing); }
+
+        void init();
+    </script>
+</body>
+</html>

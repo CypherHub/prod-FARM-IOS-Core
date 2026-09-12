@@ -15,6 +15,34 @@
       "when": 1787917825806,
       "tag": "0001_busy_bastion",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789116415682,
+      "tag": "0002_peaceful_zodiak",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789128709614,
+      "tag": "0003_marvelous_morgan_stark",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789168958810,
+      "tag": "0004_blushing_tyrannus",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789170372892,
+      "tag": "0005_graceful_stranger",
+      "breakpoints": true
     }
   ]
 }

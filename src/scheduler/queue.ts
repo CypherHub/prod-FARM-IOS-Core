@@ -37,3 +37,28 @@ export async function ensureDeviceQueue(boss: PgBoss, udid: string): Promise<str
     }
     return name;
 }
+
+export const CONTENT_INGEST_QUEUE = 'content-ingest';
+export const CONTENT_GENERATE_QUEUE = 'content-generate';
+export const CONTENT_HOOKS_QUEUE = 'content-hooks';
+
+export interface ContentIngestJob { bookmarkId: string }
+export interface ContentGenerateJob { generationId: string }
+export interface ContentHookJob { hookRunId: string }
+
+/**
+ * Content jobs are not bound to a phone, so they deliberately do not use
+ * queueNameForDevice: a scrape or an AI generation must never occupy a
+ * device's singleton queue and block a real post.
+ */
+export async function ensureContentQueue(boss: PgBoss, name: string, policy: 'standard' | 'singleton'): Promise<string> {
+    if (!await boss.getQueue(name)) {
+        await boss.createQueue(name, {
+            policy,
+            notify: true,
+            heartbeatSeconds: 60,
+            deleteAfterSeconds: 30 * 24 * 60 * 60,
+        });
+    }
+    return name;
+}

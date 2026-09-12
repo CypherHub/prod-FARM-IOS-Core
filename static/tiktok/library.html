@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Library · Handler</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="/assets/library.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <a class="brand-name" href="/">iOS Farm</a>
+                <a class="brand-by" href="https://gethandler.ai" target="_blank" rel="noopener">by Handler</a>
+            </div>
+            <nav class="topbar-nav">
+                <a class="button secondary" href="/">Devices</a>
+                <a class="button secondary" href="/tasks">Tasks</a>
+                <a class="button secondary" href="/schedule">Schedule</a>
+                <a class="button primary" href="/library">Library</a>
+                <a class="button secondary" href="/library/gallery">Gallery</a>
+            </nav>
+        </div>
+    </header>
+    <main class="shell">
+        <header class="page-header">
+            <div>
+                <span class="eyebrow">Content</span>
+                <h1>Library</h1>
+                <p>Bookmark a TikTok post to keep its media, caption, sound, stats, and on-screen text. Open one to build your own version of it.</p>
+            </div>
+        </header>
+
+        <section class="panel">
+            <div class="section-heading"><div><span class="eyebrow">Ingest</span><h2>Bookmark a post</h2></div></div>
+            <form id="bookmark-form" class="inline-form">
+                <div class="field wide">
+                    <label for="bookmark-url">TikTok URL</label>
+                    <input id="bookmark-url" name="url" type="url" required placeholder="https://www.tiktok.com/t/…" autocomplete="off">
+                    <p class="field-help">Share links and full <code>/@user/video/…</code> URLs both work. Ingest runs in the background.</p>
+                </div>
+                <div class="form-actions"><button class="button primary" type="submit">Bookmark</button></div>
+            </form>
+            <p id="bookmark-error" class="status error" hidden></p>
+        </section>
+
+        <section class="panel">
+            <div class="section-heading"><div><span class="eyebrow">Saved</span><h2>Bookmarks</h2></div></div>
+            <div id="bookmarks" class="loading-card"><span class="spinner"></span>Loading bookmarks…</div>
+        </section>
+    </main>
+    <footer class="app-footer"></footer>
+
+    <script type="module">
+        import { element, escapeHtml, jsonRequest, number, showError } from '/assets/library-shared.js';
+
+        const elements = {
+            form: element('#bookmark-form'),
+            url: element('#bookmark-url'),
+            formError: element('#bookmark-error'),
+            bookmarks: element('#bookmarks'),
+        };
+        let pollTimer = null;
+
+        function render(rows) {
+            if (rows.length === 0) {
+                elements.bookmarks.className = 'empty-state';
+                elements.bookmarks.textContent = 'No bookmarks yet. Paste a TikTok URL above.';
+                return;
+            }
+            elements.bookmarks.className = 'bookmark-grid';
+            elements.bookmarks.innerHTML = rows.map((bookmark) => {
+                const cover = bookmark.status === 'ready' ? `/api/bookmarks/${bookmark.id}/media/cover/0` : null;
+                const label = bookmark.authorName ? `@${escapeHtml(bookmark.authorName)}` : escapeHtml(bookmark.sourceUrl);
+                const badge = bookmark.status === 'ready'
+                    ? `${bookmark.kind === 'video' ? 'Video' : 'Slideshow'} · ${number(bookmark.playCount)} views`
+                    : `<span class="status ${escapeHtml(bookmark.status)}">${escapeHtml(bookmark.status)}</span>`;
+                return `<a class="bookmark-card" href="/library/bookmarks/${bookmark.id}">
+                    ${cover ? `<img src="${cover}" alt="" loading="lazy">` : '<img alt="">'}
+                    <span class="bookmark-meta"><span class="handle">${label}</span><span>${badge}</span></span>
+                </a>`;
+            }).join('');
+        }
+
+        async function load() {
+            try {
+                const { bookmarks } = await jsonRequest('/api/bookmarks');
+                render(bookmarks);
+                // Keep polling only while something is still being ingested.
+                clearTimeout(pollTimer);
+                if (bookmarks.some((row) => row.status === 'pending' || row.status === 'ingesting')) {
+                    pollTimer = setTimeout(() => void load(), 4000);
+                }
+            } catch (error) {
+                elements.bookmarks.className = 'status error';
+                elements.bookmarks.textContent = String(error.message ?? error);
+            }
+        }
+
+        elements.form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            showError(elements.formError, null);
+            try {
+                await jsonRequest('/api/bookmarks', { method: 'POST', body: JSON.stringify({ url: elements.url.value }) });
+                elements.url.value = '';
+                await load();
+            } catch (error) { showError(elements.formError, error); }
+        });
+
+        void load();
+    </script>
+</body>
+</html>

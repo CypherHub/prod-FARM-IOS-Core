@@ -1,3 +1,9 @@
+/* The `hidden` attribute must win over the display rules below. `.button` sets
+   display:inline-flex at the same specificity as the UA's [hidden] rule, so a
+   hidden button would otherwise stay on screen. Supersedes the per-element
+   workaround this file used to need for #queue-empty. */
+[hidden] { display: none !important; }
+
 :root {
     color-scheme: dark;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -273,7 +279,6 @@ dialog#calibrate-dialog { width: min(760px, calc(100% - 28px)); }
 
 .queue { display: grid; gap: 12px; }
 .queue:empty { display: none; }
-#queue-empty[hidden] { display: none; }
 .queue-row { display: grid; grid-template-columns: 24px 168px minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #0c1016; }
 .queue-row.is-scheduled { border-color: rgb(66 214 157 / 40%); opacity: .82; }
 .queue-index { padding-top: 6px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--muted); }

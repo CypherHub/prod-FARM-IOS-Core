@@ -37,6 +37,12 @@ Fastify app on `WEB_PORT` (default 3000).
   periodic `…/remote/screenshot` stills instead). The proxy aborts the
   upstream feed when the browser disconnects. `POST …/remote/action` forwards
   tap/swipe to WDA.
+- Content library (`/library`, `/library/bookmarks/:id`, `/library/create`,
+  `/library/gallery`, plus `/api/bookmarks/*`, `/api/hook-runs/*`,
+  `/api/gallery/*`, `/api/generations/*`), contributed
+  by the TikTok plugin: bookmark a TikTok post, review its stored media and
+  OCR'd overlay text, generate a new post from a local image gallery, and queue
+  the result to a phone as a draft.
 - Loads plugins (`PHONE_FARM_PLUGINS`) and the auth provider
   (`PHONE_FARM_AUTH_PLUGIN`); mounts each plugin's **panels** on the device
   page and its **routes** under `/plugins/<pluginId>`.
@@ -58,6 +64,10 @@ Headless. Owns task execution.
   the device + WDA + Appium to be ready, builds a `TaskExecutionContext`, and
   calls the task's `execute()`. Handles attempts, retry policy, stop requests,
   and the run‑window deadline.
+- Also works three **non-device** queues: `content-ingest`, `content-hooks`, and
+  `content-generate`.
+  These bypass `executeAutomation()` entirely: they have no device to wait for,
+  and they must never occupy a phone's singleton queue.
 - Must load the **same plugin versions** as `web`.
 
 ### `wda-service` — `src/devices/wda-service.ts`
@@ -114,12 +124,15 @@ without the UI, for scripted or bulk (`--all`) setup.
 
 | Store | Contents |
 | --- | --- |
-| PostgreSQL `scheduler.*` | `schedules`, `executions`, `execution_attempts`, `execution_logs`, `assets`. Drizzle ORM; migrations in `drizzle/`. |
+| PostgreSQL `scheduler.*` | `schedules`, `executions`, `execution_attempts`, `execution_logs`, `assets`, `bookmarks`, `bookmark_media`, `hook_runs`, `generations`. Drizzle ORM; migrations in `drizzle/`. |
 | PostgreSQL `pgboss.*` | Job queue (one partitioned queue per device). |
 | PostgreSQL `drizzle.*` | Applied‑migration ledger. |
 | `devices.json` | Registered devices: `udid`, `name`, ports, `coordinateProfile`, per‑device `coordinates` overrides, `passcode`, `disabled`, `pluginData`. Git‑ignored, `0600`. |
 | `.env` | Configuration and secrets (DB URL, signing IDs, auth keys). Git‑ignored. Device passcodes live in `devices.json`, not here. |
 | `.scheduler-data/assets/` | Uploaded media for `post`‑style tasks, content‑addressed. |
+| `.scheduler-data/bookmarks/<id>/` | Downloaded media for bookmarked TikTok posts. Durable — deliberately **not** in the `assets` table, whose rows are swept after `SCHEDULER_ORPHAN_ASSET_HOURS`. |
+| `gallery/<name>/` | Your own photos and clips. Git-ignored; managed from `/library` or restored with `npm run gallery:import`. |
+| `generatedPosts/{YYYY-MM-DD}/post_NNN/` | AI-generated `slide-N.jpg` (slideshow) or `post.mp4` (video), plus `caption.txt`, `music.txt`, `plan.json`. |
 | `.wda/` | wda-service socket and locks. |
 | `.appium2/` | Isolated Appium home with the pinned XCUITest driver. |
 
@@ -165,6 +178,7 @@ in `src/scheduler/recurrence.ts`; the next occurrence is written to
 | `src/devices/` | discovery, registry (`devices.json`), registration flow, WDA remote, wda-service, coordinate profiles, passcode lookup |
 | `src/devices/wda/` | `prepare.ts` (patch + build + sign WDA), `start.ts` (single-device WDA supervisor), `target-device.ts` (resolve which device a CLI command targets), diagnostics |
 | `src/tiktok/` | TikTok automation entrypoints (`doomscroll.ts`, `post.ts`), OCR, coordinates |
+| `src/content/` | Content library: Apify scraping, media download, overlay OCR, the gallery, the Claude generation step, `sharp`/ffmpeg compositing, and the `/library` routes |
 | `src/tiktok-plugin.ts` | The built‑in plugin: task definitions, device panel, routes |
 | `src/plugin.ts` | **Stable plugin & auth interfaces** |
 | `src/registry.ts` | `PluginRegistry` — task resolution and validation |

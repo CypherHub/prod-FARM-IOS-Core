@@ -1,4 +1,4 @@
-import sharp from 'sharp';
+import sharp, { type Region } from 'sharp';
 
 import { circledPickerCells, type PickerLayout, type PickerTarget } from './post-layout.js';
 
@@ -27,7 +27,7 @@ export function assignTopSlideMatches(cellMaes: number[][], slideCount: number, 
     return found;
 }
 
-async function toThumb(image: Buffer, extract?: sharp.Region): Promise<Buffer> {
+async function toThumb(image: Buffer, extract?: Region): Promise<Buffer> {
     const pipeline = extract ? sharp(image).extract(extract) : sharp(image);
     const { data } = await pipeline
         .resize(THUMB, THUMB, { fit: 'fill' })

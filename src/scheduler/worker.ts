@@ -5,7 +5,15 @@ import { activeDevices, loadRegisteredDevices } from '../devices/registry.js';
 import { configuredPluginModules, loadPlugins } from '../loader.js';
 import { PluginRegistry } from '../registry.js';
 import { executeAutomation } from './executor.js';
-import { createQueue, ensureDeviceQueue, type ExecutionJob } from './queue.js';
+import {
+    CONTENT_GENERATE_QUEUE, CONTENT_HOOKS_QUEUE, CONTENT_INGEST_QUEUE, createQueue, ensureContentQueue,
+    ensureDeviceQueue,
+    type ContentGenerateJob, type ContentHookJob, type ContentIngestJob, type ExecutionJob,
+} from './queue.js';
+import { ContentRepository } from '../content/repository.js';
+import { generatePost } from '../content/generate.js';
+import { ingestBookmark } from '../content/ingest.js';
+import { suggestHooks } from '../content/hooks.js';
 import { SchedulerRepository } from './repository.js';
 import { createTikTokPlugin } from '../tiktok-plugin.js';
 
@@ -17,6 +25,7 @@ export async function startWorker(plugins: PluginRegistry): Promise<WorkerRuntim
     const boss = createQueue();
     await boss.start();
     const repository = new SchedulerRepository(connection, boss, plugins);
+    const content = new ContentRepository(connection, boss);
     const workingQueues = new Set<string>();
 
     const registerDeviceWorkers = async (): Promise<void> => {
@@ -56,7 +65,29 @@ export async function startWorker(plugins: PluginRegistry): Promise<WorkerRuntim
         }
     };
 
+    // Content jobs never touch a phone, so they get their own queues rather
+    // than a TaskDefinition: executeAutomation() would block in waitForDevice()
+    // for a job that has no device to wait for.
+    const registerContentWorkers = async (): Promise<void> => {
+        await ensureContentQueue(boss, CONTENT_INGEST_QUEUE, 'standard');
+        await boss.work<ContentIngestJob>(CONTENT_INGEST_QUEUE, async ([job]) => {
+            if (job) await ingestBookmark(content, job.data.bookmarkId);
+        });
+        // Singleton: the Claude subprocess is heavy, so one generation at a time.
+        await ensureContentQueue(boss, CONTENT_GENERATE_QUEUE, 'singleton');
+        await boss.work<ContentGenerateJob>(CONTENT_GENERATE_QUEUE, async ([job]) => {
+            if (job) await generatePost(content, job.data.generationId);
+        });
+        // Also singleton: hook suggestion is the same heavy Claude subprocess.
+        await ensureContentQueue(boss, CONTENT_HOOKS_QUEUE, 'singleton');
+        await boss.work<ContentHookJob>(CONTENT_HOOKS_QUEUE, async ([job]) => {
+            if (job) await suggestHooks(content, job.data.hookRunId);
+        });
+        console.log(`Worker listening on ${CONTENT_INGEST_QUEUE}, ${CONTENT_GENERATE_QUEUE}, and ${CONTENT_HOOKS_QUEUE}`);
+    };
+
     await registerDeviceWorkers();
+    await registerContentWorkers();
     await repository.reconcileQueueStates();
     await repository.materializeDue();
     const materializeTimer = setInterval(() => void repository.materializeDue().catch(console.error), 5_000);

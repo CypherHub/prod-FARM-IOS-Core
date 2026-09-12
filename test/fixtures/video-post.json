@@ -1,0 +1,90 @@
+{
+  "id": "7682549944921754893",
+  "text": "“How you track your focus?”\nme: #techtok #wellness #biohacking #robotics ",
+  "textLanguage": "en",
+  "createTime": 1788733073,
+  "createTimeISO": "2026-09-06T22:17:53.000Z",
+  "locationCreated": "US",
+  "isAd": true,
+  "hasTikTokShopProduct": false,
+  "authorMeta": {
+    "id": "7331931433265284138",
+    "name": "nomad_founder",
+    "profileUrl": "https://www.tiktok.com/@nomad_founder",
+    "nickName": "Nuzair 💻 Nomad App Builder 🚀",
+    "verified": false,
+    "signature": "shipping a blind robot \n\non Oct 20 🇵🇷",
+    "bioLink": null,
+    "avatar": "https://p19-common-sign.tiktokcdn-us.com/tos-useast5-avt-0068-tx/a312e986b24d31b5a4a29bf9dc9d31fd~tplv-tiktokx-cropcenter:720:720.jpeg",
+    "commerceUserInfo": {
+      "commerceUser": false
+    },
+    "privateAccount": false,
+    "roomId": "",
+    "ttSeller": false,
+    "createTime": 1712596682,
+    "hasActiveStory": false,
+    "following": 294,
+    "friends": 52,
+    "fans": 4850,
+    "heart": 190800,
+    "video": 664,
+    "digg": 0,
+    "followDatasetUrl": null,
+    "originalAvatarUrl": "https://p19-common-sign.tiktokcdn-us.com/tos-useast5-avt-0068-tx/a312e986b24d31b5a4a29bf9dc9d31fd~tplv-tiktokx-cropcenter:720:720.jpeg"
+  },
+  "musicMeta": {
+    "musicName": "original sound - 🎞",
+    "musicAuthor": "underdogs",
+    "musicOriginal": true,
+    "playUrl": "https://v16m.tiktokcdn-us.com/6c961d4a464c9b5bff5276d41aa5f072/6aa44c55/video/tos/alisg/tos-alisg-v-27dcd7/oAJfeUAIIjGEPgGL5JCNETzp3AADToAAIbTbeT/",
+    "coverMediumUrl": "https://p16-common-sign.tiktokcdn-us.com/tos-alisg-avt-0068/f74e20ebcaecdc26a3081432b21e8156~tplv-tiktokx-cropcenter:720:720.jpeg",
+    "originalCoverMediumUrl": "https://p16-common-sign.tiktokcdn-us.com/tos-alisg-avt-0068/f74e20ebcaecdc26a3081432b21e8156~tplv-tiktokx-cropcenter:720:720.jpeg",
+    "musicId": "7611027491582659344"
+  },
+  "webVideoUrl": "https://www.tiktok.com/@nomad_founder/video/7682549944921754893",
+  "videoMeta": {
+    "height": 1280,
+    "width": 720,
+    "duration": 5,
+    "coverUrl": "https://api.apify.com/v2/key-value-stores/HYTerik9Bi6RHB0tC/records/cover-nomad_foun-20260906221753-7682549944921754893.jpg",
+    "definition": "720p",
+    "format": "mp4",
+    "downloadAddr": "https://api.apify.com/v2/key-value-stores/HYTerik9Bi6RHB0tC/records/video-nomad_foun-20260906221753-7682549944921754893.mp4",
+    "originalCoverUrl": "https://p19-common-sign.tiktokcdn-us.com/tos-useast5-p-0068-tx/ogiMpCK1TA48BceBiyZvKI5ApPdPIbRcC73wIB~tplv-tiktokx-origin.image"
+  },
+  "diggCount": 18,
+  "shareCount": 0,
+  "playCount": 3093,
+  "collectCount": 0,
+  "commentCount": 0,
+  "repostCount": 0,
+  "mentions": [],
+  "detailedMentions": [],
+  "hashtags": [
+    {
+      "id": "1609056958706689",
+      "name": "techtok"
+    },
+    {
+      "id": "259325",
+      "name": "wellness"
+    },
+    {
+      "id": "1610719990732806",
+      "name": "biohacking"
+    },
+    {
+      "id": "225961",
+      "name": "robotics"
+    }
+  ],
+  "isSlideshow": false,
+  "isPinned": false,
+  "isSponsored": false,
+  "mediaUrls": [
+    "https://api.apify.com/v2/key-value-stores/HYTerik9Bi6RHB0tC/records/video-nomad_foun-20260906221753-7682549944921754893.mp4"
+  ],
+  "isStory": false,
+  "submittedVideoUrl": "https://www.tiktok.com/t/ZTUaNch1A/"
+}

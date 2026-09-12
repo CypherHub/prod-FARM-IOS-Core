@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 
+import { registerContentRoutes } from './content/routes.js';
 import type { PhoneFarmPlugin, TaskDefinition, TaskExecutionContext } from './plugin.js';
 import type { JsonObject, JsonValue, ScheduleTiming } from './types.js';
 
@@ -161,11 +162,16 @@ export function createTikTokPlugin(configuration: TikTokPluginConfiguration = {}
         version: '0.1.0',
         displayName: 'TikTok automation',
         tasks: [createDoomscrollTask(configuration), createPostTask(configuration)],
+        navLinks: [
+            { label: 'Library', href: '/library', order: 100 },
+            { label: 'Gallery', href: '/library/gallery', order: 101 },
+        ],
         devicePanels: [{
             id: 'tiktok-controls', title: 'TikTok',
             fragmentPath: fileURLToPath(new URL('../static/tiktok/device-panel.html', import.meta.url)), order: 100,
         }],
         async registerRoutes(context) {
+            registerContentRoutes(context);
             const deviceData = async (udid: string) => (await context.loadDevices()).find((device) => device.udid === udid);
             context.app.patch<{ Params: { udid: string }; Body: { accounts?: string[] } }>('/api/devices/:udid/accounts', async (request, reply) => {
                 if (!Array.isArray(request.body.accounts)) return reply.code(400).send({ error: 'accounts must be an array' });

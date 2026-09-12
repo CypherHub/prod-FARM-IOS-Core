@@ -8,4 +8,9 @@ devices.json
 .farm.lock/
 .scheduler-data/
 static/assets/
+# Your own photos and clips, restored with `npm run gallery:import`.
+gallery/
+.DS_Store
+.appium2/
+.playwright-mcp/
 *.log

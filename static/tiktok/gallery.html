@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gallery · Handler</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="/assets/library.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <a class="brand-name" href="/">iOS Farm</a>
+                <a class="brand-by" href="https://gethandler.ai" target="_blank" rel="noopener">by Handler</a>
+            </div>
+            <nav class="topbar-nav">
+                <a class="button secondary" href="/">Devices</a>
+                <a class="button secondary" href="/tasks">Tasks</a>
+                <a class="button secondary" href="/schedule">Schedule</a>
+                <a class="button secondary" href="/library">Library</a>
+                <a class="button primary" href="/library/gallery">Gallery</a>
+            </nav>
+        </div>
+    </header>
+    <main class="shell">
+        <header class="page-header">
+            <div>
+                <span class="eyebrow">Your media</span>
+                <h1>Gallery</h1>
+                <p>Images build slideshows; clips build videos. Upload here, or bulk-load a folder with <code>npm run gallery:import</code>.</p>
+            </div>
+            <button id="refresh" class="button secondary" type="button">Refresh</button>
+        </header>
+
+        <section class="panel">
+            <div class="section-heading"><div><span class="eyebrow">Add</span><h2>New gallery</h2></div></div>
+            <form id="new-form" class="inline-form">
+                <div class="field">
+                    <label for="new-name">Name</label>
+                    <input id="new-name" type="text" placeholder="product-shots" autocomplete="off">
+                    <p class="field-help">Letters, numbers, dots, dashes, underscores.</p>
+                </div>
+                <div class="field wide">
+                    <label for="new-files">Files</label>
+                    <input id="new-files" type="file" multiple accept="image/*,video/*">
+                    <p class="field-help">JPEG, PNG, WebP, HEIC, MP4, MOV. Up to 20 files per upload.</p>
+                </div>
+                <div class="form-actions"><button class="button primary" type="submit">Create and upload</button></div>
+            </form>
+            <p id="new-error" class="status error" hidden></p>
+        </section>
+
+        <div id="galleries" class="loading-card"><span class="spinner"></span>Loading galleries…</div>
+    </main>
+    <footer class="app-footer"></footer>
+
+    <script type="module">
+        import { duration, element, escapeHtml, jsonRequest, showError } from '/assets/library-shared.js';
+
+        const el = {
+            galleries: element('#galleries'), refresh: element('#refresh'),
+            form: element('#new-form'), name: element('#new-name'), files: element('#new-files'), error: element('#new-error'),
+        };
+        let galleries = [];
+
+        async function upload(name, files) {
+            const body = new FormData();
+            for (const file of files) body.append('media', file);
+            const response = await fetch(`/api/gallery/${encodeURIComponent(name)}`, { method: 'POST', body });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.error ?? `Upload failed (${response.status})`);
+            return payload;
+        }
+
+        function render() {
+            if (galleries.length === 0) {
+                el.galleries.className = 'empty-state';
+                el.galleries.textContent = 'No galleries yet. Create one above.';
+                return;
+            }
+            el.galleries.className = '';
+            el.galleries.innerHTML = galleries.map((gallery) => {
+                const name = escapeHtml(gallery.name);
+                return `<section class="panel">
+                    <div class="section-heading">
+                        <div><h2>${name}</h2><p class="field-help">${gallery.images} image(s), ${gallery.videos} video(s)</p></div>
+                        <div class="inline-actions">
+                            <label class="button secondary" for="up-${name}">Add files</label>
+                            <input id="up-${name}" type="file" multiple accept="image/*,video/*" hidden data-upload="${name}">
+                            <button class="button secondary" type="button" data-show="${name}">Show files</button>
+                        </div>
+                    </div>
+                    <p class="status error" data-error="${name}" hidden></p>
+                    <div class="bookmark-grid" data-items="${name}"></div>
+                </section>`;
+            }).join('');
+
+            for (const button of el.galleries.querySelectorAll('[data-show]')) {
+                button.addEventListener('click', () => void toggle(button));
+            }
+            for (const input of el.galleries.querySelectorAll('[data-upload]')) {
+                input.addEventListener('change', () => void addTo(input.dataset.upload, input));
+            }
+        }
+
+        const errorFor = (name) => el.galleries.querySelector(`[data-error="${CSS.escape(name)}"]`);
+
+        async function addTo(name, input) {
+            const files = [...input.files];
+            input.value = '';
+            if (files.length === 0) return;
+            try {
+                const result = await upload(name, files);
+                await load();
+                if (result.rejected?.length) showError(errorFor(name), new Error(`Skipped unsupported: ${result.rejected.join(', ')}`));
+            } catch (error) { showError(errorFor(name), error); }
+        }
+
+        async function toggle(button) {
+            const name = button.dataset.show;
+            const host = el.galleries.querySelector(`[data-items="${CSS.escape(name)}"]`);
+            if (host.childElementCount > 0) { host.innerHTML = ''; button.textContent = 'Show files'; return; }
+            button.textContent = 'Loading…';
+            try {
+                const { items } = await jsonRequest(`/api/gallery/${encodeURIComponent(name)}`);
+                host.innerHTML = items.map((item) => {
+                    const src = `/api/gallery/${encodeURIComponent(name)}/media/${encodeURIComponent(item.name)}`;
+                    const media = item.kind === 'video'
+                        ? `<video src="${src}" preload="metadata" muted playsinline></video>`
+                        : `<img src="${src}" alt="${escapeHtml(item.name)}" loading="lazy">`;
+                    return `<figure class="bookmark-card" style="margin:0">${media}
+                        <span class="bookmark-meta"><span class="handle">${escapeHtml(item.name)}</span>
+                        <span>${item.kind === 'video' ? duration(item.durationSeconds) : 'image'}
+                        <button class="button danger" type="button" data-delete="${escapeHtml(item.name)}" data-gallery="${escapeHtml(name)}">Delete</button></span></span></figure>`;
+                }).join('');
+                for (const remove of host.querySelectorAll('[data-delete]')) {
+                    remove.addEventListener('click', () => void removeFile(remove));
+                }
+                button.textContent = 'Hide files';
+            } catch (error) {
+                showError(errorFor(name), error);
+                button.textContent = 'Show files';
+            }
+        }
+
+        async function removeFile(button) {
+            const { gallery, delete: file } = button.dataset;
+            if (!confirm(`Delete ${file} from ${gallery}? This removes the file from disk.`)) return;
+            button.disabled = true;
+            try {
+                const response = await fetch(`/api/gallery/${encodeURIComponent(gallery)}/media/${encodeURIComponent(file)}`, { method: 'DELETE' });
+                if (!response.ok && response.status !== 204) {
+                    const payload = await response.json().catch(() => ({}));
+                    throw new Error(payload.error ?? `Delete failed (${response.status})`);
+                }
+                button.closest('figure')?.remove();
+                galleries = (await jsonRequest('/api/gallery')).galleries ?? [];
+            } catch (error) {
+                showError(errorFor(gallery), error);
+                button.disabled = false;
+            }
+        }
+
+        async function load() {
+            try { galleries = (await jsonRequest('/api/gallery')).galleries ?? []; } catch { galleries = []; }
+            render();
+        }
+
+        el.refresh.addEventListener('click', () => void load());
+        el.form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            showError(el.error, null);
+            const name = el.name.value.trim();
+            const files = [...el.files.files];
+            if (!name) return showError(el.error, new Error('Name the gallery first.'));
+            if (files.length === 0) return showError(el.error, new Error('Choose at least one file.'));
+            try {
+                const result = await upload(name, files);
+                el.name.value = '';
+                el.files.value = '';
+                await load();
+                if (result.rejected?.length) showError(el.error, new Error(`Skipped unsupported: ${result.rejected.join(', ')}`));
+            } catch (error) { showError(el.error, error); }
+        });
+
+        void load();
+    </script>
+</body>
+</html>

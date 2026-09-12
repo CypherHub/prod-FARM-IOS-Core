@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Template · Handler</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="/assets/library.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <a class="brand-name" href="/">iOS Farm</a>
+                <a class="brand-by" href="https://gethandler.ai" target="_blank" rel="noopener">by Handler</a>
+            </div>
+            <nav class="topbar-nav">
+                <a class="button secondary" href="/">Devices</a>
+                <a class="button secondary" href="/tasks">Tasks</a>
+                <a class="button secondary" href="/schedule">Schedule</a>
+                <a class="button primary" href="/library">Library</a>
+                <a class="button secondary" href="/library/gallery">Gallery</a>
+            </nav>
+        </div>
+    </header>
+    <main class="shell">
+        <header class="page-header">
+            <div>
+                <span class="eyebrow"><a href="/library">← Library</a></span>
+                <h1 id="title">Template</h1>
+                <p id="subtitle"></p>
+            </div>
+            <div class="inline-actions">
+                <a class="button primary" id="create" href="#">Create content from this template</a>
+                <button class="button secondary" id="retry" type="button" hidden>Retry ingest</button>
+                <button class="button danger" id="remove" type="button">Delete</button>
+            </div>
+        </header>
+        <p id="page-error" class="status error" hidden></p>
+        <div id="body" class="loading-card"><span class="spinner"></span>Loading…</div>
+    </main>
+    <footer class="app-footer"></footer>
+
+    <script type="module">
+        import {
+            element, escapeHtml, jsonRequest, number, seconds, showError, when,
+        } from '/assets/library-shared.js';
+
+        const id = location.pathname.split('/').pop();
+        const elements = {
+            title: element('#title'), subtitle: element('#subtitle'), body: element('#body'),
+            create: element('#create'), retry: element('#retry'), remove: element('#remove'),
+            error: element('#page-error'),
+        };
+        elements.create.href = `/library/create?bookmark=${encodeURIComponent(id)}`;
+
+        function facts(pairs) {
+            const rows = pairs.filter(([, value]) => value !== null && value !== undefined && value !== '');
+            if (rows.length === 0) return '';
+            return `<dl class="facts">${rows.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${value}</dd>`).join('')}</dl>`;
+        }
+        const chips = (values) => (values?.length
+            ? `<div class="chips">${values.map((value) => `<span class="chip">${escapeHtml(value)}</span>`).join('')}</div>` : '');
+
+        function render(bookmark) {
+            const raw = bookmark.raw ?? {};
+            const author = raw.author ?? {};
+            const music = raw.music ?? {};
+            const media = bookmark.media.filter((row) => row.role === 'slide' || row.role === 'video');
+            const videoRow = media.find((row) => row.role === 'video');
+
+            elements.title.textContent = bookmark.authorName ? `@${bookmark.authorName}` : 'Template';
+            elements.subtitle.textContent = bookmark.kind === 'video' ? 'Video template' : 'Slideshow template';
+            elements.retry.hidden = bookmark.status !== 'failed';
+            elements.create.classList.toggle('secondary', bookmark.status !== 'ready');
+
+            const ocr = media.map((row) => {
+                const src = `/api/bookmarks/${bookmark.id}/media/${row.role}/${row.index}`;
+                const preview = row.role === 'video'
+                    ? `<video src="${src}" controls preload="metadata"></video>`
+                    : `<img src="${src}" alt="Slide ${row.index}" loading="lazy">`;
+                const text = row.ocrText?.trim();
+                return `<div class="ocr-slide">${preview}<div>
+                    <strong style="font-size:0.82rem">${row.role === 'video' ? 'First frame' : `Slide ${row.index}`}</strong>
+                    ${text ? `<pre>${escapeHtml(text)}</pre>` : '<p class="ocr-empty">No text read</p>'}
+                </div></div>`;
+            }).join('');
+
+            elements.body.className = '';
+            elements.body.innerHTML = `
+                ${bookmark.error ? `<p class="status error">${escapeHtml(bookmark.error)}</p>` : ''}
+                ${bookmark.status !== 'ready' ? `<p class="status ${escapeHtml(bookmark.status)}">${escapeHtml(bookmark.status)}…</p>` : ''}
+
+                <section class="panel">
+                    <div class="section-heading"><div><span class="eyebrow">How it performed</span><h2>Performance</h2></div></div>
+                    <div class="metrics">
+                        <div class="metric"><strong>${number(bookmark.playCount)}</strong><span>views</span></div>
+                        <div class="metric"><strong>${number(bookmark.diggCount)}</strong><span>likes</span></div>
+                        <div class="metric"><strong>${number(bookmark.commentCount)}</strong><span>comments</span></div>
+                        <div class="metric"><strong>${number(bookmark.shareCount)}</strong><span>shares</span></div>
+                        <div class="metric"><strong>${number(bookmark.collectCount)}</strong><span>saves</span></div>
+                    </div>
+                </section>
+
+                ${bookmark.hook ? `<section class="panel">
+                    <div class="section-heading"><div><span class="eyebrow">What it opened with</span><h2>Hook</h2></div></div>
+                    <pre class="copy">${escapeHtml(bookmark.hook)}</pre></section>` : ''}
+
+                <div class="split">
+                    <section class="panel">
+                        <div class="section-heading"><div><h2>Post</h2></div></div>
+                        ${facts([
+                            ['Type', bookmark.kind === 'video' ? 'Video' : 'Slideshow'],
+                            ['Length', seconds(videoRow?.durationSeconds)],
+                            ['Slides', media.filter((row) => row.role === 'slide').length || null],
+                            ['Posted', when(bookmark.postedAt)],
+                            ['Bookmarked', when(bookmark.ingestedAt ?? bookmark.createdAt)],
+                            ['TikTok ID', bookmark.tiktokId ? `<code>${escapeHtml(bookmark.tiktokId)}</code>` : null],
+                            ['Link', `<a href="${escapeHtml(bookmark.sourceUrl)}" target="_blank" rel="noopener">Open on TikTok</a>`],
+                        ])}
+                        <h3>Author</h3>
+                        ${facts([
+                            ['Handle', bookmark.authorName ? `@${escapeHtml(bookmark.authorName)}` : null],
+                            ['Name', escapeHtml(bookmark.authorNickname ?? '')],
+                            ['Followers', typeof author.fans === 'number' ? number(author.fans) : null],
+                            ['Total likes', typeof author.heart === 'number' ? number(author.heart) : null],
+                        ])}
+                        <h3>Sound</h3>
+                        ${facts([
+                            ['Track', escapeHtml(bookmark.musicName ?? '')],
+                            ['Artist', escapeHtml(bookmark.musicAuthor ?? '')],
+                            ['Original', music.musicOriginal === true ? 'Yes' : music.musicOriginal === false ? 'No' : null],
+                            ['Link', bookmark.musicUrl ? `<a href="${escapeHtml(bookmark.musicUrl)}" target="_blank" rel="noopener">Open sound</a>` : null],
+                        ]) || '<p class="ocr-empty">No sound recorded.</p>'}
+                    </section>
+
+                    <section class="panel">
+                        <div class="section-heading"><div><h2>Caption</h2></div></div>
+                        <pre class="copy">${escapeHtml(bookmark.caption || '')}</pre>
+                        ${bookmark.hashtags?.length ? `<h3>Hashtags</h3>${chips(bookmark.hashtags.map((tag) => `#${tag}`))}` : ''}
+                        ${bookmark.mentions?.length ? `<h3>Mentions</h3>${chips(bookmark.mentions)}` : ''}
+                    </section>
+                </div>
+
+                <section class="panel">
+                    <div class="section-heading"><div><span class="eyebrow">Read by OCR</span><h2>On-screen text</h2></div></div>
+                    ${ocr || '<p class="ocr-empty">No media stored.</p>'}
+                </section>
+
+                ${bookmark.generations?.length ? `<section class="panel">
+                    <div class="section-heading"><div><h2>Generated from this</h2></div></div>
+                    <ul style="margin:0;padding-left:18px">${bookmark.generations.map((generation) =>
+                        `<li style="margin-bottom:6px"><a href="/library/create?bookmark=${bookmark.id}&generation=${generation.id}">${escapeHtml(generation.status)} · ${new Date(generation.createdAt).toLocaleString()}</a>${generation.hook ? ` — ${escapeHtml(generation.hook.split('\n')[0])}` : ''}</li>`).join('')}</ul>
+                </section>` : ''}
+            `;
+        }
+
+        async function load() {
+            try {
+                const bookmark = await jsonRequest(`/api/bookmarks/${id}`);
+                render(bookmark);
+                if (bookmark.status === 'pending' || bookmark.status === 'ingesting') setTimeout(() => void load(), 4000);
+            } catch (error) {
+                elements.body.className = 'status error';
+                elements.body.textContent = String(error.message ?? error);
+            }
+        }
+
+        elements.retry.addEventListener('click', async () => {
+            showError(elements.error, null);
+            try {
+                await jsonRequest(`/api/bookmarks/${id}/retry`, { method: 'POST' });
+                await load();
+            } catch (error) { showError(elements.error, error); }
+        });
+
+        elements.remove.addEventListener('click', async () => {
+            if (!confirm('Delete this bookmark and its downloaded media?')) return;
+            try {
+                await jsonRequest(`/api/bookmarks/${id}`, { method: 'DELETE' });
+                location.href = '/library';
+            } catch (error) { showError(elements.error, error); }
+        });
+
+        void load();
+    </script>
+</body>
+</html>
