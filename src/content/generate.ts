@@ -377,6 +377,14 @@ export async function generatePost(
         const outputDir = await allocateOutputDirectory(outputRoot, now());
 
         if (plan.kind === 'video') {
+            // Use a random starting timestamp for variety instead of the fixed
+            // stamp the model chose.
+            const clipName = path.basename(plan.galleryVideo);
+            const clipDuration = clipDurations.get(clipName) ?? targetSeconds;
+            const maxStart = Math.max(0, clipDuration - targetSeconds);
+            plan.trimStartSeconds = maxStart > 0
+                ? Math.round((Math.random() * maxStart) * 100) / 100
+                : 0;
             log(`Trimming ${plan.galleryVideo} from ${plan.trimStartSeconds}s into ${path.relative(process.cwd(), outputDir)}`);
             await compositeVideo({
                 clipPath: resolveGalleryAsset(workspace, plan.galleryVideo),
