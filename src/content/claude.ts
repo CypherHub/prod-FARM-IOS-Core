@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { httpJson } from './http.js';
