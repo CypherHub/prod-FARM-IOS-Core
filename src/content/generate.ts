@@ -2,7 +2,7 @@ import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node
 import os from 'node:os';
 import path from 'node:path';
 
-import { runClaude } from './claude.js';
+import { runClaude, runClaudeWithFallback } from './claude.js';
 import { compositeSlide, compositeVideo } from './composite.js';
 import { isFalConfigured, renderSlideText } from './fal.js';
 import { eligibleClips, listGalleryImages, type EligibleClip } from './gallery.js';
@@ -264,7 +264,7 @@ export async function generatePost(
     signal?: AbortSignal,
     dependencies: GenerateDependencies = {},
 ): Promise<void> {
-    const runModel = dependencies.runModel ?? runClaude;
+    const runModel = dependencies.runModel ?? runClaudeWithFallback;
     const log = dependencies.log ?? ((line: string) => console.log(`[generate ${generationId}] ${line}`));
     const now = dependencies.now ?? (() => new Date());
 

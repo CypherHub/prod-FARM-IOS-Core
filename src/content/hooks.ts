@@ -2,7 +2,7 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promi
 import os from 'node:os';
 import path from 'node:path';
 
-import { runClaude } from './claude.js';
+import { runClaude, runClaudeWithFallback } from './claude.js';
 import { referenceBlock, type ReferenceInput } from './generate.js';
 import { resolveWithinDataRoot } from './paths.js';
 import { assertHook, normalizeHook, PlanValidationError } from './plan.js';
@@ -80,7 +80,7 @@ export async function suggestHooks(
     signal?: AbortSignal,
     dependencies: HookDependencies = {},
 ): Promise<void> {
-    const runModel = dependencies.runModel ?? runClaude;
+    const runModel = dependencies.runModel ?? runClaudeWithFallback;
     const log = dependencies.log ?? ((line: string) => console.log(`[hooks ${hookRunId}] ${line}`));
 
     const run = await repository.hookRun(hookRunId);
