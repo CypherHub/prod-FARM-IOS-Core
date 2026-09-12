@@ -1,0 +1,1 @@
+ALTER TABLE "scheduler"."workflow_steps" ADD COLUMN "skip_steps" integer;

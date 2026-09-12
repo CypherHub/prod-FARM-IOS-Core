@@ -91,4 +91,5 @@ export interface WorkflowStep {
     appBundleId?: string;
     appActionType?: string;
     url?: string;
+    skipSteps?: number;
 }

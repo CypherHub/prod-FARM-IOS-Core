@@ -187,6 +187,8 @@ export const workflowSteps = schedulerSchema.table('workflow_steps', {
     appBundleId: text('app_bundle_id'),
     appActionType: text('app_action_type'),
     url: text('url'),
+    /** When set on an if_condition step: if AI answers YES, skip this many steps forward. If NO, continue normally (don't stop). */
+    skipSteps: integer('skip_steps'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 }, (table) => [
     index('workflow_steps_workflow_idx').on(table.workflowId, table.stepOrder),

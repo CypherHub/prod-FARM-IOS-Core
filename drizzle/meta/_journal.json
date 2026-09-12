@@ -57,6 +57,13 @@
       "when": 1789221682002,
       "tag": "0007_premium_tombstone",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789227935408,
+      "tag": "0008_add-skip-steps",
+      "breakpoints": true
     }
   ]
 }

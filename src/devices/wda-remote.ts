@@ -260,7 +260,7 @@ export class WdaRemoteControl {
                 endY: Math.round(height * 0.47),
                 durationMs: 350,
             }));
-            await this.wait(2200);
+            await this.wait(5000);
         }
 
         console.log('Entering device passcode');

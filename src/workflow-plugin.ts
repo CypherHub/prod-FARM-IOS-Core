@@ -140,7 +140,8 @@ async function runSteps(
     signal: AbortSignal,
     runId: string,
 ): Promise<void> {
-    for (const step of steps) {
+    for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
         if (signal.aborted) {
             updateReplayLog(runId, step.stepOrder, 'Replay stopped by user', 'info');
             return;
@@ -240,10 +241,21 @@ async function runSteps(
                     const buf = await remote.getScreenshot(deviceUdid);
                     const { answer, reason } = await evaluateCondition(step.aiQuestion, buf);
                     updateReplayLog(runId, step.stepOrder, `AI condition: "${step.aiQuestion}" → ${answer ? 'YES' : 'NO'} (${reason})${step.label ? ` — ${step.label}` : ''}`, 'condition');
-                    if (!answer) {
-                        updateReplayLog(runId, step.stepOrder, `Condition not met, stopping replay`, 'info');
-                        finishReplay(runId, 'stopped', `AI condition "${step.aiQuestion}" evaluated as NO: ${reason}`);
-                        return;
+                    if (step.skipSteps) {
+                        // Skip mode: YES = skip forward skipSteps steps; NO = continue (don't stop)
+                        if (answer) {
+                            i += step.skipSteps;
+                            updateReplayLog(runId, step.stepOrder, `Condition met, skipping ${step.skipSteps} step(s)`, 'info');
+                        } else {
+                            updateReplayLog(runId, step.stepOrder, `Condition not met, continuing (skipping not triggered)`, 'info');
+                        }
+                    } else {
+                        // Gate mode: YES = continue; NO = stop replay (legacy behavior)
+                        if (!answer) {
+                            updateReplayLog(runId, step.stepOrder, `Condition not met, stopping replay`, 'info');
+                            finishReplay(runId, 'stopped', `AI condition "${step.aiQuestion}" evaluated as NO: ${reason}`);
+                            return;
+                        }
                     }
                     break;
                 }
@@ -340,6 +352,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     appBundleId?: string;
                     appActionType?: string;
                     url?: string;
+                    skipSteps?: number;
                 };
             }>('/api/workflows/:id/steps', async (request, reply) => {
                 const { id } = request.params;
@@ -367,6 +380,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     appBundleId: request.body.appBundleId?.trim() ?? null,
                     appActionType: request.body.appActionType?.trim() ?? null,
                     url: request.body.url?.trim() ?? null,
+                    skipSteps: request.body.skipSteps ?? null,
                 }).returning();
                 return reply.code(201).send(row);
             });
@@ -386,6 +400,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     appActionType?: string;
                     url?: string;
                     stepOrder?: number;
+                    skipSteps?: number;
                 };
             }>('/api/workflow-steps/:stepId', async (request, reply) => {
                 const updates: Record<string, unknown> = {};
@@ -402,6 +417,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 if (request.body.appActionType !== undefined) updates.appActionType = request.body.appActionType?.trim() ?? null;
                 if (request.body.url !== undefined) updates.url = request.body.url?.trim() ?? null;
                 if (request.body.stepOrder !== undefined) updates.stepOrder = request.body.stepOrder;
+                if (request.body.skipSteps !== undefined) updates.skipSteps = request.body.skipSteps;
 
                 const [row] = await db.update(workflowSteps).set(updates)
                     .where(eq(workflowSteps.id, request.params.stepId)).returning();
