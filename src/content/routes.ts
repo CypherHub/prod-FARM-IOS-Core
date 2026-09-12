@@ -19,6 +19,17 @@ import { ContentRepository, ContentStateError } from './repository.js';
 /** What a finished generation leaves in its output folder. */
 const SLIDE_OUTPUT = /^slide-\d+\.jpg$/;
 const VIDEO_OUTPUT = 'post.mp4';
+/**
+ * A download filename built from the output folder, e.g.
+ * `2026-09-12-post_007.mp4`. Sanitized because it lands in a header.
+ */
+export function downloadName(outputDir: string, file: string): string {
+    const post = path.basename(outputDir);
+    const day = path.basename(path.dirname(outputDir));
+    const stem = file === VIDEO_OUTPUT ? `${day}-${post}` : `${day}-${post}-${path.basename(file, path.extname(file))}`;
+    return `${stem.replace(/[^A-Za-z0-9._-]/g, '-')}${path.extname(file)}`;
+}
+
 /** How many videos one batch may create at once. */
 const MAX_HOOKS_PER_BATCH = 5;
 
@@ -294,17 +305,25 @@ export function registerContentRoutes(context: PluginRouteContext, repository?: 
         };
     });
 
-    app.get<{ Params: { id: string; name: string } }>('/api/generations/:id/slides/:name', async (request, reply) => {
-        const generation = await content.generation(request.params.id);
-        if (!generation?.outputDir) return reply.code(404).send({ error: 'Generation has no output yet' });
-        // Only ever serve the files this generation produced.
-        const { name } = request.params;
-        if (!SLIDE_OUTPUT.test(name) && name !== VIDEO_OUTPUT) return reply.code(400).send({ error: 'Unknown output file' });
-        return reply
-            .type(name === VIDEO_OUTPUT ? 'video/mp4' : 'image/jpeg')
-            .header('cache-control', 'private, max-age=3600')
-            .send(createReadStream(path.join(generation.outputDir, name)));
-    });
+    app.get<{ Params: { id: string; name: string }; Querystring: { download?: string } }>(
+        '/api/generations/:id/slides/:name', async (request, reply) => {
+            const generation = await content.generation(request.params.id);
+            if (!generation?.outputDir) return reply.code(404).send({ error: 'Generation has no output yet' });
+            // Only ever serve the files this generation produced.
+            const { name } = request.params;
+            if (!SLIDE_OUTPUT.test(name) && name !== VIDEO_OUTPUT) return reply.code(400).send({ error: 'Unknown output file' });
+
+            if (request.query.download !== undefined) {
+                // Name the file after the post it came from, so a folder of
+                // downloads is still identifiable: 2026-09-12-post_007.mp4.
+                reply.header('content-disposition', `attachment; filename="${downloadName(generation.outputDir, name)}"`);
+            }
+            return reply
+                .type(name === VIDEO_OUTPUT ? 'video/mp4' : 'image/jpeg')
+                .header('cache-control', 'private, max-age=3600')
+                .send(createReadStream(path.join(generation.outputDir, name)));
+        },
+    );
 
     app.patch<{ Params: { id: string }; Body: { caption?: string } }>('/api/generations/:id', async (request, reply) => {
         const caption = request.body?.caption;

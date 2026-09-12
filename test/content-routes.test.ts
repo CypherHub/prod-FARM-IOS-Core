@@ -24,6 +24,7 @@ const readyBookmark = {
 };
 
 interface FakeState {
+    outputDir?: string;
     bookmarkUrl?: (url: string) => Promise<unknown>;
     createGeneration?: () => Promise<unknown>;
     mediaRelativePath?: string | null;
@@ -54,7 +55,10 @@ async function buildApp(state: FakeState = {}): Promise<{ app: FastifyInstance; 
         async hookRun(id: string) { return id === 'run-1' ? { id, status: 'ready', hooks: ['a'] } : null; },
         async listHookRuns() { return [{ id: 'run-1', status: 'ready', hooks: ['a'] }]; },
         async updateHookRun(id: string, values: Record<string, unknown>) { return { id, ...values }; },
-        async generation(id: string) { return id === 'gen-1' ? { id, status: 'pending', outputDir: null } : null; },
+        async generation(id: string) {
+            if (id === 'gen-ready') return { id, status: 'ready', outputDir: state.outputDir ?? null };
+            return id === 'gen-1' ? { id, status: 'pending', outputDir: null } : null;
+        },
         async updateGeneration(id: string, values: Record<string, unknown>) { return { id, ...values }; },
         async updateBookmark() { return readyBookmark; },
         async enqueueIngest(id: string) { queued.push(id); },
@@ -298,4 +302,34 @@ test('caption edits are bounded and a generation that is not ready cannot be que
     // status is 'pending', so queueing must be refused rather than posting nothing.
     const queued = await app.inject({ method: 'POST', url: '/api/generations/gen-1/queue', payload: {} });
     assert.equal(queued.statusCode, 409);
+});
+
+test('generated media downloads with a filename naming the post it came from', async () => {
+    const { downloadName } = await import('../src/content/routes.js');
+    assert.equal(downloadName('/x/generatedPosts/2026-09-12/post_007', 'post.mp4'), '2026-09-12-post_007.mp4');
+    assert.equal(downloadName('/x/generatedPosts/2026-09-12/post_007', 'slide-2.jpg'), '2026-09-12-post_007-slide-2.jpg');
+    // Anything odd in the path is scrubbed — this lands in a header.
+    assert.equal(downloadName('/x/2026 09/po"st', 'post.mp4'), '2026-09-po-st.mp4');
+});
+
+test('the media route attaches only when asked, and still refuses unknown files', async () => {
+    const outputDir = path.join(directory, 'generatedPosts', '2026-09-12', 'post_007');
+    await mkdir(outputDir, { recursive: true });
+    await writeFile(path.join(outputDir, 'post.mp4'), 'mp4-bytes');
+    const { app } = await buildApp({ outputDir });
+
+    // Inline by default, so the review player can stream it.
+    const inline = await app.inject('/api/generations/gen-ready/slides/post.mp4');
+    assert.equal(inline.statusCode, 200);
+    assert.equal(inline.headers['content-type'], 'video/mp4');
+    assert.equal(inline.headers['content-disposition'], undefined);
+
+    const download = await app.inject('/api/generations/gen-ready/slides/post.mp4?download=1');
+    assert.equal(download.statusCode, 200);
+    assert.equal(download.headers['content-disposition'], 'attachment; filename="2026-09-12-post_007.mp4"');
+    assert.equal(download.body, 'mp4-bytes');
+
+    // The download flag must not widen what can be read.
+    assert.equal((await app.inject('/api/generations/gen-ready/slides/..%2F..%2F.env?download=1')).statusCode, 400);
+    assert.equal((await app.inject('/api/generations/gen-ready/slides/plan.json?download=1')).statusCode, 400);
 });

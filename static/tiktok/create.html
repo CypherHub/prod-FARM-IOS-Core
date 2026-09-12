@@ -331,12 +331,27 @@
                 </div>
                 <div class="form-actions">
                     <button class="button secondary" type="button" data-save ${queued ? 'disabled' : ''}>Save caption</button>
+                    <button class="button secondary" type="button" data-download>${generation.video ? 'Download video' : `Download ${(generation.slides ?? []).length} slides`}</button>
                     <button class="button primary" type="button" data-queue ${queued ? 'disabled' : ''}>${queued ? 'Queued as draft' : 'Queue draft to device'}</button>
                 </div>
                 <p class="status error" data-error hidden></p>`;
 
             const errorNode = host.querySelector('[data-error]');
             const caption = () => host.querySelector('[data-caption]').value;
+
+            host.querySelector('[data-download]')?.addEventListener('click', () => {
+                // ?download makes the server send Content-Disposition: attachment,
+                // so a video is saved rather than opened in the player.
+                const files = generation.video ? [generation.video] : (generation.slides ?? []);
+                for (const [index, file] of files.entries()) {
+                    const link = document.createElement('a');
+                    link.href = `/api/generations/${generation.id}/slides/${encodeURIComponent(file)}?download=1`;
+                    link.download = '';
+                    document.body.append(link);
+                    // Stagger slightly: browsers drop simultaneous downloads.
+                    setTimeout(() => { link.click(); link.remove(); }, index * 250);
+                }
+            });
             host.querySelector('[data-save]')?.addEventListener('click', async () => {
                 showError(errorNode, null);
                 try {
