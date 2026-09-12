@@ -14,3 +14,4 @@ gallery/
 .appium2/
 .playwright-mcp/
 *.log
+generatedPosts/

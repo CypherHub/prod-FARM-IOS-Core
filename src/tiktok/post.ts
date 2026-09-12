@@ -41,6 +41,11 @@ function positiveInteger(name: string, fallback: number): number {
     return value;
 }
 
+function appiumFailedBecauseLocked(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    return /could not be, unlocked|device was not, or could not be, unlocked|reason: Locked/i.test(message);
+}
+
 async function importMedia(manifest: PostManifest): Promise<number> {
     const wdaUrl = process.env.WDA_URL ?? 'http://127.0.0.1:8100';
     let assetCount = 0;
@@ -801,6 +806,12 @@ for (let attempt = 1; attempt <= REACH_CAPTION_SCREEN_ATTEMPTS && !reachedCaptio
         console.log(`Retrying up to the caption screen (attempt ${attempt}/${REACH_CAPTION_SCREEN_ATTEMPTS})`);
     }
     try {
+        // Unlock is its own 3-try loop. Re-run it before every Appium session:
+        // a lit lock screen looks "awake" so the first pass can return while
+        // SpringBoard still refuses to launch TikTok.
+        await deviceRemote.unlock(manifest.device.udid, {
+            force: attempt > 1 && appiumFailedBecauseLocked(lastAttemptError),
+        });
         driver = await remote({ hostname: process.env.APPIUM_HOST ?? '127.0.0.1', port: positiveInteger('APPIUM_PORT', 4725), path: '/', logLevel: 'info', connectionRetryCount: 0, connectionRetryTimeout: 180000, capabilities });
         await driver.updateSettings({ defaultActiveApplication: bundleId });
         await driver.setTimeout({ implicit: 0 });

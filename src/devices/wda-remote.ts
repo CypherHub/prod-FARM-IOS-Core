@@ -4,6 +4,7 @@ import { coordinatesForProfile } from './coordinates.js';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const SCREEN_ASLEEP_LUMA = 12;
+export const UNLOCK_ATTEMPTS = 3;
 
 export interface ScreenSize {
     width: number;
@@ -110,6 +111,7 @@ export class WdaRemoteControl {
     readonly timeoutMs: number;
     readonly passcode: string | undefined;
     readonly passcodeKeypadLayout: PasscodeKeypadLayout;
+    private readonly wait: (ms: number) => Promise<void>;
     private cachedScreenInfo: ScreenInfo | undefined;
 
     constructor({
@@ -120,6 +122,7 @@ export class WdaRemoteControl {
         timeoutMs = DEFAULT_TIMEOUT_MS,
         passcode = process.env.IOS_PASSCODE,
         passcodeKeypadLayout = coordinatesForProfile().passcodeKeypad,
+        wait = delay,
     }: {
         wdaUrl?: string;
         mjpegUrl?: string;
@@ -128,6 +131,7 @@ export class WdaRemoteControl {
         timeoutMs?: number;
         passcode?: string;
         passcodeKeypadLayout?: PasscodeKeypadLayout;
+        wait?: (ms: number) => Promise<void>;
     } = {}) {
         this.wdaUrl = wdaUrl.replace(/\/$/, '');
         this.mjpegUrl = mjpegUrl.replace(/\/$/, '');
@@ -136,6 +140,7 @@ export class WdaRemoteControl {
         this.timeoutMs = timeoutMs;
         this.passcode = passcode;
         this.passcodeKeypadLayout = passcodeKeypadLayout;
+        this.wait = wait;
     }
 
     assertTarget(udid: string): void {
@@ -208,19 +213,41 @@ export class WdaRemoteControl {
         return payload.value;
     }
 
-    async unlock(udid: string): Promise<void> {
+    async unlock(udid: string, options: { force?: boolean } = {}): Promise<void> {
         this.assertTarget(udid);
-        const reportedLocked = await this.isLocked(udid);
-        const wasAsleep = await screenshotLooksAsleep(await this.getScreenshot(udid));
-        // `/wda/locked` is false on a sleeping Face ID phone, but SpringBoard
-        // still refuses to launch apps. A black screenshot is the reliable signal.
-        if (!reportedLocked && !wasAsleep) return;
+        if (!options.force && !await this.needsUnlock(udid)) return;
         if (!this.passcode) {
             throw new RemoteDeviceError('IOS_PASSCODE is not configured; cannot unlock the device');
         }
 
         const screen = this.cachedScreenInfo ?? await this.getScreenInfo(udid);
         const { width, height } = screen.screenSize;
+        let lastError: Error | undefined;
+        for (let attempt = 1; attempt <= UNLOCK_ATTEMPTS; attempt += 1) {
+            if (attempt > 1) console.log(`Retrying unlock (attempt ${attempt}/${UNLOCK_ATTEMPTS})`);
+            try {
+                await this.attemptUnlock(udid, width, height);
+                if (!await this.needsUnlock(udid)) return;
+                lastError = new RemoteDeviceError('Device is still locked after entering the passcode');
+                console.log(`Unlock attempt ${attempt}/${UNLOCK_ATTEMPTS} failed: still locked`);
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error(String(error));
+                console.log(`Unlock attempt ${attempt}/${UNLOCK_ATTEMPTS} failed: ${lastError.message}`);
+            }
+            if (attempt < UNLOCK_ATTEMPTS) await this.wait(800);
+        }
+        throw new RemoteDeviceError(`Device is still locked after ${UNLOCK_ATTEMPTS} unlock attempts`);
+    }
+
+    private async needsUnlock(udid: string): Promise<boolean> {
+        const reportedLocked = await this.isLocked(udid);
+        const wasAsleep = await screenshotLooksAsleep(await this.getScreenshot(udid));
+        // `/wda/locked` is false on a sleeping Face ID phone, but SpringBoard
+        // still refuses to launch apps. A black screenshot is the reliable signal.
+        return reportedLocked || wasAsleep;
+    }
+
+    private async attemptUnlock(udid: string, width: number, height: number): Promise<void> {
         await this.wakeDisplay(udid, width, height);
         if (height >= 800) {
             // Face ID: swipe up from the home indicator, then wait for Face ID
@@ -233,20 +260,20 @@ export class WdaRemoteControl {
                 endY: Math.round(height * 0.47),
                 durationMs: 350,
             }));
-            await delay(2200);
+            await this.wait(2200);
         }
 
         console.log('Entering device passcode');
-        for (const character of this.passcode) {
+        for (const character of this.passcode ?? '') {
             const digit = Number(character);
             if (!Number.isInteger(digit) || digit < 0 || digit > 9) {
                 throw new RemoteDeviceError('IOS_PASSCODE must contain only digits');
             }
             const { x, y } = passcodeDigitPoint(digit, this.passcodeKeypadLayout);
             await this.sendPointer(tapActions({ type: 'tap', x, y }));
-            await delay(250);
+            await this.wait(250);
         }
-        await delay(600);
+        await this.wait(1000);
         if (await screenshotLooksAsleep(await this.getScreenshot(udid))) {
             try {
                 await this.request('/wda/pressButton', {
@@ -258,10 +285,7 @@ export class WdaRemoteControl {
             } catch {
                 // ignore
             }
-            await delay(400);
-        }
-        if (await screenshotLooksAsleep(await this.getScreenshot(udid))) {
-            throw new RemoteDeviceError('Device is still locked after entering the passcode');
+            await this.wait(400);
         }
     }
 
@@ -280,19 +304,19 @@ export class WdaRemoteControl {
         } catch {
             // fall through
         }
-        await delay(400);
+        await this.wait(400);
         if (!await screenshotLooksAsleep(await this.getScreenshot(udid))) return;
         try {
             await this.request('/wda/unlock', { method: 'POST', timeoutMs: 2_000 });
         } catch {
             // keypad still required
         }
-        await delay(300);
+        await this.wait(300);
         if (!await screenshotLooksAsleep(await this.getScreenshot(udid))) return;
         await this.sendPointer(tapActions({ type: 'tap', x: Math.round(width / 2), y: Math.round(height / 2) }));
         for (let i = 0; i < 8; i += 1) {
             if (!await screenshotLooksAsleep(await this.getScreenshot(udid))) return;
-            await delay(200);
+            await this.wait(200);
         }
     }
 
