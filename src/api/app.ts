@@ -51,6 +51,10 @@ interface LoadedDashboardTheme {
     registerDeviceHtml: string;
     registerDeviceScript: string;
     htmx: string;
+    workflowsHtml: string;
+    workflowEditorHtml: string;
+    workflowsScript: string;
+    workflowEditorScript: string;
 }
 
 function errorMessage(error: unknown): string {
@@ -166,7 +170,8 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
     if (options.dashboardTheme) {
         const root = options.dashboardTheme.rootDirectory;
         const require = createRequire(import.meta.url);
-        const [indexHtml, deviceHtml, tasksHtml, scheduleHtml, registerDeviceHtml, styles, deviceScript, tasksScript, scheduleScript, registerDeviceScript, htmx] = await Promise.all([
+        const [indexHtml, deviceHtml, tasksHtml, scheduleHtml, registerDeviceHtml, styles, deviceScript, tasksScript, scheduleScript, registerDeviceScript, htmx,
+            workflowsHtml, workflowEditorHtml, workflowsScript, workflowEditorScript] = await Promise.all([
             readFile(path.join(root, 'templates/index.html'), 'utf8'),
             readFile(path.join(root, 'templates/device.html'), 'utf8'),
             readFile(path.join(root, 'templates/tasks.html'), 'utf8'),
@@ -178,6 +183,10 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
             readFile(path.join(root, 'assets/schedule.js'), 'utf8'),
             readFile(path.join(root, 'assets/register-device.js'), 'utf8'),
             readFile(require.resolve('htmx.org/dist/htmx.min.js'), 'utf8'),
+            readFile(path.join(root, 'templates/workflows.html'), 'utf8'),
+            readFile(path.join(root, 'templates/workflow-editor.html'), 'utf8'),
+            readFile(path.join(root, 'assets/workflows.js'), 'utf8'),
+            readFile(path.join(root, 'assets/workflow-editor.js'), 'utf8'),
         ]);
         // Content-hash every asset URL in the templates so a changed file gets a
         // fresh URL that no browser or CDN can serve stale.
@@ -185,6 +194,7 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
             'styles.css': assetHash(styles), 'device.js': assetHash(deviceScript),
             'tasks.js': assetHash(tasksScript), 'schedule.js': assetHash(scheduleScript),
             'register-device.js': assetHash(registerDeviceScript),
+            'workflows.js': assetHash(workflowsScript), 'workflow-editor.js': assetHash(workflowEditorScript),
             'htmx.min.js': assetHash(htmx),
         };
         const finalize = (html: string) => {
@@ -197,7 +207,9 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
             indexHtml: finalize(indexHtml), deviceHtml: finalize(deviceHtml),
             tasksHtml: finalize(tasksHtml), scheduleHtml: finalize(scheduleHtml),
             registerDeviceHtml: finalize(registerDeviceHtml),
-            styles, deviceScript, tasksScript, scheduleScript, registerDeviceScript, htmx,
+            workflowsHtml: finalize(workflowsHtml), workflowEditorHtml: finalize(workflowEditorHtml),
+            styles, deviceScript, tasksScript, scheduleScript, registerDeviceScript,
+            workflowsScript, workflowEditorScript, htmx,
         };
     }
 
@@ -576,6 +588,8 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
         app.get('/assets/schedule.js', asset('text/javascript', theme.scheduleScript));
         app.get('/assets/register-device.js', asset('text/javascript', theme.registerDeviceScript));
         app.get('/assets/htmx.min.js', asset('text/javascript', theme.htmx));
+        app.get('/assets/workflows.js', asset('text/javascript', theme.workflowsScript));
+        app.get('/assets/workflow-editor.js', asset('text/javascript', theme.workflowEditorScript));
         app.get('/api/fragments/devices', async (_request, reply) => {
             const devices = await registeredWithStatus();
             const active = devices.filter((device) => !device.disabled);
@@ -660,6 +674,12 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
         themed?.scheduleHtml ?? renderPage('Schedule', '<h1>Schedule content</h1><p>The themed dashboard provides a batch content-scheduling page here. Without it, upload media to <code>POST /api/devices/:udid/posts</code>.</p>'),
     ));
     app.get('/docs', async (_request, reply) => reply.type('text/html').send(renderPage('API', '<h1>API</h1><p>Use <code>/api/plugins</code>, <code>/api/devices</code>, <code>/api/schedules</code>, and <code>/api/executions</code>. This route follows the configured authentication policy.</p>')));
+    app.get('/workflows', async (_request, reply) => reply.type('text/html').send(
+        themed?.workflowsHtml ?? renderPage('Workflows', '<h1>Workflows</h1><p>The themed dashboard provides a workflow editor page here.</p>'),
+    ));
+    app.get<{ Params: { id: string } }>('/workflows/:id', async (request, reply) => reply.type('text/html').send(
+        themed?.workflowEditorHtml ?? renderPage('Workflow Editor', '<h1>Workflow Editor</h1><p>The themed dashboard provides a workflow editor page here.</p>'),
+    ));
 
     app.setErrorHandler((error, request, reply) => {
         request.log.error(error);

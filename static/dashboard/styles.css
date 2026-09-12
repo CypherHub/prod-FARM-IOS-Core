@@ -130,9 +130,13 @@ button:disabled { cursor: wait; opacity: .55; }
 .inline-actions { display: flex; gap: 7px; }
 .icon-button { min-height: 34px; padding: 0 10px; font-size: 11px; }
 .phone { width: 100%; aspect-ratio: 375 / 667; padding: 7px; overflow: hidden; border: 1px solid #303a48; border-radius: 25px; background: #05070a; }
-#screen { display: block; width: 100%; height: 100%; border-radius: 19px; background: #020305; object-fit: contain; touch-action: none; user-select: none; -webkit-user-drag: none; cursor: crosshair; }
+#wf-screen, #screen { display: block; width: 100%; height: 100%; border-radius: 19px; background: #020305; object-fit: contain; touch-action: none; user-select: none; -webkit-user-drag: none; cursor: crosshair; }
 .stream-workspace { display: grid; grid-template-columns: minmax(260px, 390px) 132px; gap: 14px; align-items: start; justify-content: center; }
 .stream-status { display: flex; align-items: center; gap: 8px; margin: 14px 0 9px; color: var(--muted); font-size: 12px; }
+
+.device-selector { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.device-selector label { color: var(--muted); font-size: 12px; font-weight: 750; white-space: nowrap; }
+.device-selector select { flex: 1; min-height: 38px; font-size: 13px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: #687386; }
 .ready .dot, .succeeded .dot { background: var(--success); box-shadow: 0 0 9px var(--success); }
 .running .dot, .busy .dot { background: var(--warning); box-shadow: 0 0 9px var(--warning); }

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Workflow Editor · Handler</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <a class="brand-name" href="/">iOS Farm</a>
+                <a class="brand-by" href="https://gethandler.ai" target="_blank" rel="noopener">by Handler</a>
+            </div>
+            <nav class="topbar-nav"><a class="button secondary" href="/">Devices</a><a class="button secondary" href="/workflows">Workflows</a>__PLUGIN_NAV____AUTH_NAV__</nav>
+        </div>
+    </header>
+    <main class="shell">
+        <!-- Workflow header -->
+        <div class="breadcrumb"><a href="/workflows">Workflows</a> <span>/</span> <span id="workflow-name-display">Loading…</span></div>
+        <header class="page-header" id="editor-header">
+            <div>
+                <span class="eyebrow">Workflow</span>
+                <h1 id="wf-editor-name">Loading…</h1>
+                <p id="wf-editor-meta"></p>
+            </div>
+            <div class="inline-actions">
+                <button id="save-workflow" class="button secondary" type="button">Save</button>
+                <button id="replay-workflow" class="button primary" type="button">Replay</button>
+            </div>
+        </header>
+
+        <!-- Replay status panel -->
+        <div id="replay-status" class="run-panel loading-card" style="display:none"><span class="spinner"></span>Running workflow…</div>
+
+        <div class="workspace-grid">
+            <!-- Left: Steps panel -->
+            <section class="panel action-stack" id="steps-panel">
+                <div class="section-heading">
+                    <div><span class="eyebrow">Step by step</span><h2>Steps</h2></div>
+                    <div class="inline-actions">
+                        <button id="add-step" class="button primary" type="button">Add step</button>
+                    </div>
+                </div>
+                <div id="steps-list" class="task-list loading-card"><span class="spinner"></span>Loading steps…</div>
+
+                <!-- Step details form -->
+                <div id="step-detail" class="automation-form" style="display:none">
+                    <div class="section-heading"><div><span class="eyebrow">Selected</span><h2 id="step-detail-title">Step details</h2></div>
+                        <div class="inline-actions"><button id="step-delete" class="button secondary" type="button">Delete</button></div>
+                    </div>
+                    <label>Label <small>(optional)</small><input id="step-label" type="text" placeholder="e.g. Tap Post button"></label>
+                    <div id="step-params">
+                        <!-- Params rendered dynamically -->
+                    </div>
+                    <button id="step-update" class="button secondary" type="button">Update</button>
+                </div>
+            </section>
+
+            <!-- Right: Phone stream panel -->
+            <section class="panel" id="phone-panel">
+                <div class="section-heading">
+                    <div><span class="eyebrow">Device</span><h2>Phone</h2></div>
+                    <div class="inline-actions">
+                        <label class="cal-switch" id="record-toggle-container" style="display:none">
+                            <span style="font-size:12px;font-weight:750;margin-right:7px">Record</span>
+                            <input type="checkbox" id="record-toggle">
+                            <span class="cal-switch-track"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="device-selector">
+                    <label for="wf-device-select">Assigned device</label>
+                    <select id="wf-device-select">
+                        <option value="">— No device —</option>
+                    </select>
+                </div>
+                <div class="phone">
+                    <img id="wf-screen" src="" alt="Phone screen" draggable="false" style="cursor:crosshair;touch-action:none">
+                </div>
+                <div class="stream-status" id="wf-stream-status">
+                    <span class="dot"></span>
+                    <span id="wf-stream-label">Connect a device to stream its screen</span>
+                </div>
+                <div class="remote-controls">
+                    <div class="swipe-pad">
+                        <button class="remote-button up" data-dir="up" type="button" aria-label="Swipe up"></button>
+                        <button class="remote-button left" data-dir="left" type="button" aria-label="Swipe left"></button>
+                        <div class="pad-center"></div>
+                        <button class="remote-button right" data-dir="right" type="button" aria-label="Swipe right"></button>
+                        <button class="remote-button down" data-dir="down" type="button" aria-label="Swipe down"></button>
+                    </div>
+                    <div class="system-controls">
+                        <button class="remote-button labeled" data-action="home" type="button"><span>&#8962;</span> Home</button>
+                        <button class="remote-button labeled" data-action="lock" type="button"><span>&#128274;</span> Lock</button>
+                        <button class="remote-button labeled" data-action="wake" type="button"><span>&#9728;</span> Wake</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Add step dialog -->
+        <dialog id="add-step-dialog">
+            <form class="modal" method="dialog">
+                <div class="modal-head"><div><span class="eyebrow">New</span><h2>Add step</h2></div></div>
+                <label>Step type<select id="step-type-select">
+                    <option value="tap">Tap</option>
+                    <option value="swipe">Swipe</option>
+                    <option value="wait">Wait</option>
+                    <option value="if_condition">AI IF Condition</option>
+                    <option value="home">Home button</option>
+                    <option value="unlock">Unlock device</option>
+                    <option value="open_url">Open URL</option>
+                    <option value="app_action">App action</option>
+                    <option value="screenshot">Screenshot</option>
+                </select></label>
+                <div id="add-step-label-field">
+                    <label>Label <small>(optional)</small><input id="add-step-label" type="text" placeholder="e.g. Tap Post button"></label>
+                </div>
+                <div id="add-step-params">
+                    <!-- Dynamic fields based on type -->
+                </div>
+                <div class="form-actions"><button class="button secondary" type="button" onclick="this.closest('dialog').close()">Cancel</button><button id="add-step-submit" class="button primary" type="submit">Add</button></div>
+            </form>
+        </dialog>
+    </main>
+    <script type="module" src="/assets/workflow-editor.js"></script>
+    <footer class="app-footer">__FOOTER__</footer>
+</body>
+</html>

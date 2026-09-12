@@ -60,3 +60,35 @@ export interface TaskRetryPolicy {
     retryDelaySeconds: number;
     retryBackoff: boolean;
 }
+
+export type WorkflowStatus = 'draft' | 'active' | 'completed' | 'archived';
+export type WorkflowStepType = 'tap' | 'swipe' | 'wait' | 'if_condition' | 'app_action' | 'home' | 'unlock' | 'open_url' | 'screenshot';
+
+export interface Workflow {
+    id: string;
+    name: string;
+    description?: string;
+    deviceUdid?: string;
+    status: WorkflowStatus;
+    steps?: WorkflowStep[];
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface WorkflowStep {
+    id: string;
+    workflowId: string;
+    stepOrder: number;
+    stepType: WorkflowStepType;
+    label?: string;
+    x?: number;
+    y?: number;
+    endX?: number;
+    endY?: number;
+    durationMs?: number;
+    waitMs?: number;
+    aiQuestion?: string;
+    appBundleId?: string;
+    appActionType?: string;
+    url?: string;
+}

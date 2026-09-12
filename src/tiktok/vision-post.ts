@@ -104,11 +104,28 @@ async function fillCaption(context: VideoVisionContext): Promise<void> {
 }
 
 async function runGoal(context: VideoVisionContext, goal: VideoVisionGoal): Promise<void> {
+    // #region agent log
+    const logEndpoint = 'http://127.0.0.1:7276/ingest/c84fa4ce-b9c8-4c6e-bbdf-21e53389e3ff';
+    const logLine = (location: string, msg: string, data: Record<string, unknown>) => {
+        fetch(logEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '00d9c7' }, body: JSON.stringify({ sessionId: '00d9c7', runId: '1', timestamp: Date.now(), location, message: msg, data }), }).catch(() => {});
+    };
+    // #endregion agent log
     let committed = false;
     let pickedNewest = false;
     let scrolledToNewest = false;
     for (let attempt = 1; attempt <= ATTEMPTS_PER_GOAL; attempt += 1) {
         const { decision, point } = await decide(context, goal);
+        logLine('runGoal:ATTEMPT', `Attempt ${attempt} for ${goal}`, {
+            goal, attempt,
+            screen: decision.screen,
+            action: decision.action,
+            goalMet: decision.goalMet,
+            nx: decision.nx, ny: decision.ny,
+            reason: decision.reason,
+            pickedNewest, scrolledToNewest, committed,
+            hasPoint: !!point,
+            pointX: point?.x, pointY: point?.y,
+        });
         if (goal === 'finish' && committed && (decision.screen === 'feed' || decision.action === 'fail' || decision.goalMet)) {
             console.log(`Vision finish committed (${decision.screen}): ${decision.reason}`);
             await context.debugShot?.(`${goal}-met`);
@@ -116,12 +133,14 @@ async function runGoal(context: VideoVisionContext, goal: VideoVisionGoal): Prom
         }
         if (goal === 'pick_newest_video' && (decision.screen === 'editor' || decision.screen === 'caption') && (pickedNewest || decision.goalMet || decision.action === 'fail')) {
             if (pickedNewest || decision.goalMet) {
+                logLine('runGoal:PICK_MET', 'pick_newest_video met', { screen: decision.screen, pickedNewest, goalMet: decision.goalMet, action: decision.action, reason: decision.reason });
                 console.log(`Vision pick_newest_video met (${decision.screen}): ${decision.reason}`);
-                await context.debugShot?.(`${goal}-met`);
+   120|                await context.debugShot?.(`${goal}-met`);
                 return;
             }
         }
         if (decision.goalMet && goal === 'pick_newest_video' && !pickedNewest) {
+            logLine('runGoal:IGNORE_MET', 'Ignored goalMet until cell tapped', { screen: decision.screen });
             console.log('Vision pick_newest_video ignored goalMet until the last filled cell is tapped');
         } else if (decision.goalMet && !(goal === 'finish' && !committed && decision.screen === 'caption')) {
             console.log(`Vision ${goal} met (${decision.screen}): ${decision.reason}`);
@@ -132,19 +151,23 @@ async function runGoal(context: VideoVisionContext, goal: VideoVisionGoal): Prom
             console.log('Vision finish ignored goalMet until Drafts/Post is tapped');
         }
         if (goal === 'pick_newest_video' && context.scrollToNewestVideo && !scrolledToNewest && isGridTap(decision.ny)) {
+            logLine('runGoal:TRIGGER_SCROLL', 'Triggering scroll to newest', { attempt, ny: decision.ny });
             await scrollPickerToNewest(context);
             scrolledToNewest = true;
             context._scrolledToNewest = true;
+            logLine('runGoal:AFTER_SCROLL', 'Scroll done', {});
             attempt -= 1;
             continue;
         }
         await applyDecision(context, goal, decision, point, attempt);
         if (goal === 'finish' && decision.action === 'tap' && point) committed = true;
         if (goal === 'pick_newest_video' && decision.action === 'tap' && point && isGridTap(decision.ny)) {
+            logLine('runGoal:PICKED_TAP', 'Picked newest tap applied', { x: point.x, y: point.y, decisionNx: decision.nx, decisionNy: decision.ny });
             pickedNewest = true;
         }
     }
     if (goal === 'finish' && committed) {
+        logLine('runGoal:FINISH_COMMITTED', 'Finish committed', {});
         console.log('Vision finish tapped Drafts/Post; treating the post as committed');
         return;
     }
@@ -156,6 +179,12 @@ async function decide(
     goal: VideoVisionGoal,
     extra?: string,
 ): Promise<{ decision: VisionDecision; point?: { x: number; y: number } }> {
+    // #region agent log
+    const logEndpoint = 'http://127.0.0.1:7276/ingest/c84fa4ce-b9c8-4c6e-bbdf-21e53389e3ff';
+    const logLine = (location: string, msg: string, data: Record<string, unknown>) => {
+        fetch(logEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '00d9c7' }, body: JSON.stringify({ sessionId: '00d9c7', runId: '1', timestamp: Date.now(), location, message: msg, data }), }).catch(() => {});
+    };
+    // #endregion agent log
     const { image, screen } = await screenshotForVision(context);
     const ask = context.ask ?? askVisionGuide;
     let decision = await ask({
@@ -163,6 +192,18 @@ async function decide(
         goal,
         destination: context.manifest.destination,
         extra,
+    });
+    logLine('decide:AFTER_ASK', `Vision decision for ${goal}`, {
+        goal,
+        screen: decision.screen,
+        action: decision.action,
+        goalMet: decision.goalMet,
+        nx: decision.nx,
+        ny: decision.ny,
+        reason: decision.reason,
+        scrolledToNewest: context._scrolledToNewest,
+        screenW: screen.screenSize.width,
+        screenH: screen.screenSize.height,
     });
     if (acceptGoalMet(goal, decision.screen) && goal !== 'fill_caption' && goal !== 'finish' && goal !== 'pick_newest_video') {
         decision = { ...decision, goalMet: true };
@@ -173,15 +214,20 @@ async function decide(
     if (decision.action === 'tap' && decision.nx !== undefined && decision.ny !== undefined) {
         const forbidden = forbiddenTapReason(goal, decision.nx, decision.ny, context.manifest.destination);
         if (forbidden) {
+            logLine('decide:FORBIDDEN', `Vision ${goal} refused ${forbidden}`, { nx: decision.nx, ny: decision.ny, forbidden });
             console.log(`Vision ${goal} refused ${forbidden} at (${decision.nx.toFixed(2)}, ${decision.ny.toFixed(2)})`);
             return { decision: { ...decision, action: 'wait', reason: `refused ${forbidden}` } };
         }
         const raw = pointFromNormalized(decision.nx, decision.ny, screen.screenSize);
         const gridTap = isGridTap(decision.ny);
+        logLine('decide:RAW_POINT', `Raw point for ${goal}`, { rawX: raw.x, rawY: raw.y, gridTap, decisionNx: decision.nx, decisionNy: decision.ny });
         if (goal === 'finish' && context.finishPoint) {
             point = context.finishPoint;
+            logLine('decide:FINISH_POINT', 'Using finishPoint', { x: point.x, y: point.y });
         } else if (goal === 'pick_newest_video' && context.videoPicker && gridTap) {
-            point = snapToVideoPickerCell(raw, context.videoPicker);
+            const snapped = snapToVideoPickerCell(raw, context.videoPicker);
+            logLine('decide:SNAP_BEFORE_FORCE', 'Snapped cell', { snappedX: snapped.x, snappedY: snapped.y, videoPickerFirstY: context.videoPicker.firstY, videoPickerRowStep: context.videoPicker.rowStep, videoPickerCellX: context.videoPicker.cellX, videoPickerCellStep: context.videoPicker.cellStep });
+            point = snapped;
             // After scroll, the model sees the last visible row but the
             // coordinate often lands between row centers. Force to the
             // last row that fits above the toolbar (~0.91 ny).
@@ -190,17 +236,23 @@ async function decide(
                 const step = context.videoPicker.rowStep;
                 const maxRow = Math.floor((screen.screenSize.height * 0.91 - top) / step);
                 const snappedRow = Math.round((raw.y - top) / step);
+                logLine('decide:FORCE_LAST_ROW', 'Force last row check', { top, step, maxRow, snappedRow, rawY: raw.y, screenH: screen.screenSize.height, forcedY: top + maxRow * step });
                 if (snappedRow < maxRow) {
                     point = {
                         ...point,
                         y: top + maxRow * step,
                     };
+                    logLine('decide:FORCE_LAST_ROW_APPLIED', 'Forced to last row', { maxRow, snappedRow, newY: point.y });
                     console.log(`Vision pick_newest_video forced to last row ${maxRow} (snapped ${snappedRow})`);
+                } else {
+                    logLine('decide:FORCE_LAST_ROW_SKIPPED', 'Snapped row already at max', { maxRow, snappedRow });
                 }
             }
+            logLine('decide:FINAL_TAP', 'Final tap point', { x: point.x, y: point.y, scrolledToNewest: context._scrolledToNewest });
             console.log(`Vision pick_newest_video snapped (${decision.nx.toFixed(2)}, ${decision.ny.toFixed(2)}) to cell (${point.x}, ${point.y})`);
         } else {
             point = raw;
+            logLine('decide:NO_SNAP', 'Used raw point (no snap)', { x: point.x, y: point.y, goal, hasVideoPicker: !!context.videoPicker, gridTap });
         }
     }
     await context.debugShot?.(point ? `${goal}-tap` : goal, {
@@ -248,6 +300,13 @@ async function scrollPickerToNewest(context: VideoVisionContext): Promise<void> 
     const x = Math.round(screen.screenSize.width * 0.5);
     const startY = Math.round(screen.screenSize.height * 0.72);
     const endY = Math.round(screen.screenSize.height * 0.28);
+    // #region agent log
+    const logEndpoint = 'http://127.0.0.1:7276/ingest/c84fa4ce-b9c8-4c6e-bbdf-21e53389e3ff';
+    const logLine = (location: string, msg: string, data: Record<string, unknown>) => {
+        fetch(logEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '00d9c7' }, body: JSON.stringify({ sessionId: '00d9c7', runId: '1', timestamp: Date.now(), location, message: msg, data }), }).catch(() => {});
+    };
+    logLine('scrollPickerToNewest:ENTRY', 'Scroll picker to newest called', { screenWidth: screen.screenSize.width, screenHeight: screen.screenSize.height, startY, endY, x });
+    // #endregion agent log
     for (let index = 1; index <= 3; index += 1) {
         await swipeCoordinate(context.driver, x, startY, x, endY, 400, `picker toward newest (${index}/3)`);
         await wait(context, 500);

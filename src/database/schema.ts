@@ -151,8 +151,51 @@ export const generations = schedulerSchema.table('generations', {
     index('generations_status_idx').on(table.status, table.createdAt),
 ]);
 
+export const workflowStatus = schedulerSchema.enum('workflow_status', [
+    'draft', 'active', 'completed', 'archived',
+]);
+
+export const workflowStepType = schedulerSchema.enum('workflow_step_type', [
+    'tap', 'swipe', 'wait', 'if_condition', 'app_action', 'home', 'unlock', 'open_url', 'screenshot',
+]);
+
+export const workflows = schedulerSchema.table('workflows', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    description: text('description'),
+    deviceUdid: text('device_udid'),
+    status: workflowStatus('status').notNull().default('draft'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+    index('workflows_device_idx').on(table.deviceUdid, table.createdAt),
+]);
+
+export const workflowSteps = schedulerSchema.table('workflow_steps', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowId: uuid('workflow_id').notNull().references(() => workflows.id, { onDelete: 'cascade' }),
+    stepOrder: integer('step_order').notNull(),
+    stepType: workflowStepType('step_type').notNull(),
+    label: text('label'),
+    x: integer('x'),
+    y: integer('y'),
+    endX: integer('end_x'),
+    endY: integer('end_y'),
+    durationMs: integer('duration_ms'),
+    waitMs: integer('wait_ms'),
+    aiQuestion: text('ai_question'),
+    appBundleId: text('app_bundle_id'),
+    appActionType: text('app_action_type'),
+    url: text('url'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+    index('workflow_steps_workflow_idx').on(table.workflowId, table.stepOrder),
+]);
+
 export type ScheduleRow = typeof schedules.$inferSelect;
 export type ExecutionRow = typeof executions.$inferSelect;
+export type WorkflowRow = typeof workflows.$inferSelect;
+export type WorkflowStepRow = typeof workflowSteps.$inferSelect;
 export type BookmarkRow = typeof bookmarks.$inferSelect;
 export type BookmarkMediaRow = typeof bookmarkMedia.$inferSelect;
 export type GenerationRow = typeof generations.$inferSelect;

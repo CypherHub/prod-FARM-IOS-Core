@@ -50,6 +50,13 @@
       "when": 1789174985822,
       "tag": "0006_left_tempest",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789221682002,
+      "tag": "0007_premium_tombstone",
+      "breakpoints": true
     }
   ]
 }

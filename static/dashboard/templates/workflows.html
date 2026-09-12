@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Workflows · Handler</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <a class="brand-name" href="/">iOS Farm</a>
+                <a class="brand-by" href="https://gethandler.ai" target="_blank" rel="noopener">by Handler</a>
+            </div>
+            <nav class="topbar-nav"><a class="button secondary" href="/">Devices</a><a class="button secondary" href="/schedule">Schedule</a><a class="button secondary" href="/tasks">Tasks</a><button id="refresh-workflows" class="button secondary" type="button">Refresh</button>__PLUGIN_NAV____AUTH_NAV__</nav>
+        </div>
+    </header>
+    <main class="shell">
+        <header class="page-header">
+            <div><span class="eyebrow">Automation workflows</span><h1>Workflows</h1><p>Record touch sequences on a phone and replay them as automated workflows with AI-powered IF conditions.</p></div>
+            <div class="inline-actions"><button id="create-workflow" class="button primary" type="button">New workflow</button></div>
+        </header>
+
+        <section class="panel">
+            <div class="section-heading"><div><span class="eyebrow">All</span><h2>Workflows</h2></div></div>
+            <div id="workflow-list" class="task-list loading-card"><span class="spinner"></span>Loading workflows…</div>
+        </section>
+
+        <dialog id="create-dialog">
+            <form class="modal" method="dialog">
+                <div class="modal-head"><div><span class="eyebrow">New</span><h2>Create workflow</h2></div></div>
+                <label>Name<input id="wf-name" type="text" placeholder="e.g. Open music URL" required></label>
+                <label>Description <small>(optional)</small><textarea id="wf-description" placeholder="What does this workflow do?"></textarea></label>
+                <label>Device UDID <small>(optional, set later)</small><input id="wf-udid" type="text" placeholder="Leave blank to assign later"></label>
+                <div class="form-actions"><button class="button secondary" type="button" onclick="this.closest('dialog').close()">Cancel</button><button id="create-submit" class="button primary" type="submit">Create</button></div>
+            </form>
+        </dialog>
+    </main>
+    <script type="module" src="/assets/workflows.js"></script>
+    <footer class="app-footer">__FOOTER__</footer>
+</body>
+</html>
