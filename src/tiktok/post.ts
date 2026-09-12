@@ -900,6 +900,7 @@ for (let attempt = 1; attempt <= REACH_CAPTION_SCREEN_ATTEMPTS && !reachedCaptio
                 },
                 scrollToNewestVideo: true,
             });
+            // #endregion
         }
         reachedCaptionScreen = true;
     } catch (error) {

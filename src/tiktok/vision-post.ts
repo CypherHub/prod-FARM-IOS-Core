@@ -34,6 +34,8 @@ export interface VideoVisionContext {
     finishPoint?: { x: number; y: number };
     videoPicker?: VideoPickerLayout;
     scrollToNewestVideo?: boolean;
+    /** @internal set by runGoal after scrolling to the bottom of the picker */
+    _scrolledToNewest?: boolean;
 }
 
 export async function runVideoVisionToCaption(context: VideoVisionContext): Promise<void> {
@@ -131,6 +133,7 @@ async function runGoal(context: VideoVisionContext, goal: VideoVisionGoal): Prom
         if (goal === 'pick_newest_video' && context.scrollToNewestVideo && !scrolledToNewest && isGridTap(decision.ny)) {
             await scrollPickerToNewest(context);
             scrolledToNewest = true;
+            context._scrolledToNewest = true;
             attempt -= 1;
             continue;
         }
@@ -173,10 +176,27 @@ async function decide(
             return { decision: { ...decision, action: 'wait', reason: `refused ${forbidden}` } };
         }
         const raw = pointFromNormalized(decision.nx, decision.ny, screen.screenSize);
+        const gridTap = isGridTap(decision.ny);
         if (goal === 'finish' && context.finishPoint) {
             point = context.finishPoint;
-        } else if (goal === 'pick_newest_video' && context.videoPicker && isGridTap(decision.ny)) {
+        } else if (goal === 'pick_newest_video' && context.videoPicker && gridTap) {
             point = snapToVideoPickerCell(raw, context.videoPicker);
+            // After scroll, the model sees the last visible row but the
+            // coordinate often lands between row centers. Force to the
+            // last row that fits above the toolbar (~0.91 ny).
+            if (context._scrolledToNewest) {
+                const top = context.videoPicker.firstY - 40;
+                const step = context.videoPicker.rowStep;
+                const maxRow = Math.floor((screen.screenSize.height * 0.91 - top) / step);
+                const snappedRow = Math.round((raw.y - top) / step);
+                if (snappedRow < maxRow) {
+                    point = {
+                        ...point,
+                        y: top + maxRow * step,
+                    };
+                    console.log(`Vision pick_newest_video forced to last row ${maxRow} (snapped ${snappedRow})`);
+                }
+            }
             console.log(`Vision pick_newest_video snapped (${decision.nx.toFixed(2)}, ${decision.ny.toFixed(2)}) to cell (${point.x}, ${point.y})`);
         } else {
             point = raw;
