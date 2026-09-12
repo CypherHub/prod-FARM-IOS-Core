@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import sharp from 'sharp';
 
 import { probeMedia } from './gallery.js';
-import type { PlanSlide } from './plan.js';
+import type { HookAlign, PlanSlide } from './plan.js';
 
 const run = promisify(execFile);
 
@@ -69,12 +69,15 @@ export function hookSvg(
     height = SLIDE_HEIGHT,
     /** Where the letterboxed video actually sits, so the hook lands on it. */
     contentBox: { top: number; height: number } = { top: 0, height },
+    align: HookAlign = 'center',
 ): string {
     const maxWidth = width - HOOK_TEXT_MARGIN * 2;
-    const lines = hook.split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .flatMap((line) => wrapLine(line, HOOK_TEXT_SIZE, maxWidth));
+    // Blank lines are kept: they are deliberate spacing, and render as a gap
+    // rather than as a <text> element.
+    const lines = hook.split('\n').flatMap((line) => {
+        const trimmed = line.trim();
+        return trimmed ? wrapLine(trimmed, HOOK_TEXT_SIZE, maxWidth) : [''];
+    });
 
     const blockHeight = lines.length * HOOK_TEXT_SIZE * HOOK_TEXT_GAP;
     // Sit the hook inside the top of the picture, the way TikTok does. Placing
@@ -86,11 +89,15 @@ export function hookSvg(
     // Never let it run off the frame.
     cursor = Math.max(HOOK_TEXT_SIZE + 8, Math.min(cursor, height - blockHeight));
 
+    const anchor = align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle';
+    const x = align === 'left' ? HOOK_TEXT_MARGIN : align === 'right' ? width - HOOK_TEXT_MARGIN : width / 2;
+
     const text = lines.map((line) => {
         const y = Math.round(cursor);
         cursor += HOOK_TEXT_SIZE * HOOK_TEXT_GAP;
-        return `<text x="${width / 2}" y="${y}" font-family="${HOOK_FONT}" font-size="${HOOK_TEXT_SIZE}"`
-            + ` font-weight="800" text-anchor="middle" fill="#ffffff" stroke="#000000"`
+        if (!line) return '';
+        return `<text x="${x}" y="${y}" font-family="${HOOK_FONT}" font-size="${HOOK_TEXT_SIZE}"`
+            + ` font-weight="800" text-anchor="${anchor}" fill="#ffffff" stroke="#000000"`
             + ` stroke-width="${HOOK_TEXT_STROKE}" stroke-linejoin="round" paint-order="stroke fill">`
             + `${escapeXml(line)}</text>`;
     }).join('');
@@ -176,8 +183,12 @@ export function contentBoxFor(clipWidth: number | null, clipHeight: number | nul
 }
 
 /** The video hook layer: TikTok-style white-on-black-outline, no background. */
-export async function renderHookPng(hook: string, contentBox?: { top: number; height: number }): Promise<Buffer> {
-    return sharp(Buffer.from(hookSvg(hook, SLIDE_WIDTH, SLIDE_HEIGHT, contentBox))).png().toBuffer();
+export async function renderHookPng(
+    hook: string,
+    contentBox?: { top: number; height: number },
+    align: HookAlign = 'center',
+): Promise<Buffer> {
+    return sharp(Buffer.from(hookSvg(hook, SLIDE_WIDTH, SLIDE_HEIGHT, contentBox, align))).png().toBuffer();
 }
 
 export interface VideoCompositeOptions {
@@ -220,15 +231,16 @@ export async function compositeVideo(options: {
     trimStartSeconds: number;
     durationSeconds: number;
     hook: string;
+    hookAlign?: HookAlign;
     outputPath: string;
 }): Promise<void> {
-    const { clipPath, trimStartSeconds, durationSeconds, hook, outputPath } = options;
+    const { clipPath, trimStartSeconds, durationSeconds, hook, hookAlign = 'center', outputPath } = options;
     let overlayPng: string | null = null;
     if (hook.trim()) {
         overlayPng = path.join(path.dirname(outputPath), '.overlay.png');
         // sharp cannot read a video container, so the clip's shape comes from ffprobe.
         const { width, height } = await probeMedia(clipPath);
-        await writeFile(overlayPng, await renderHookPng(hook, contentBoxFor(width, height)));
+        await writeFile(overlayPng, await renderHookPng(hook, contentBoxFor(width, height), hookAlign));
     }
     await run('ffmpeg', videoCompositeArguments({
         clipPath, trimStartSeconds, durationSeconds, overlayPng, outputPath,

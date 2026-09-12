@@ -38,6 +38,32 @@ export const MAX_LINES_PER_SLIDE = 8;
 const MAX_LINE_LENGTH = 200;
 // A hook has to be readable on a phone while the video moves.
 export const MAX_HOOK_LENGTH = 220;
+/** Blank lines are meaningful spacing in a hook, so it gets its own ceiling. */
+export const MAX_HOOK_LINES = 12;
+
+export type HookAlign = 'left' | 'center' | 'right';
+export const HOOK_ALIGNS: readonly HookAlign[] = ['left', 'center', 'right'];
+export const isHookAlign = (value: unknown): value is HookAlign =>
+    typeof value === 'string' && (HOOK_ALIGNS as readonly string[]).includes(value);
+
+/**
+ * Trims each line and drops blank lines at the top and bottom, but keeps blank
+ * lines *between* lines — they are deliberate spacing in an on-screen hook.
+ */
+export function normalizeHook(raw: string): string {
+    const lines = raw.replace(/\r\n?/g, '\n').split('\n').map((line) => line.trim());
+    while (lines.length > 0 && lines[0] === '') lines.shift();
+    while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+    return lines.join('\n');
+}
+
+/** Shared shape/limit checks for a hook, wherever it arrived from. */
+export function assertHook(hook: string, field = 'hook'): string {
+    if (!hook) throw new PlanValidationError(`plan.${field} must not be empty`);
+    if (hook.length > MAX_HOOK_LENGTH) throw new PlanValidationError(`plan.${field} must be at most ${MAX_HOOK_LENGTH} characters`);
+    if (hook.split('\n').length > MAX_HOOK_LINES) throw new PlanValidationError(`plan.${field} must be at most ${MAX_HOOK_LINES} lines`);
+    return hook;
+}
 
 function asArray(value: unknown, field: string): unknown[] {
     if (!Array.isArray(value)) throw new PlanValidationError(`plan.${field} must be an array`);
@@ -176,12 +202,7 @@ function validateVideoPlan(input: Record<string, unknown>, limits?: VideoPlanLim
     const rawHook = typeof input.hook === 'string'
         ? input.hook
         : overlayLines(input.overlayLines, 'overlayLines').join('\n');
-    const hook = rawHook.split('\n').map((line) => line.trim()).filter(Boolean).join('\n');
-    if (!hook) throw new PlanValidationError('plan.hook must not be empty');
-    if (hook.length > MAX_HOOK_LENGTH) throw new PlanValidationError(`plan.hook must be at most ${MAX_HOOK_LENGTH} characters`);
-    if (hook.split('\n').length > MAX_LINES_PER_SLIDE) {
-        throw new PlanValidationError(`plan.hook must be at most ${MAX_LINES_PER_SLIDE} lines`);
-    }
+    const hook = assertHook(normalizeHook(rawHook));
 
     return {
         kind: 'video',

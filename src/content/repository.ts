@@ -152,7 +152,7 @@ export class ContentRepository {
         bookmarkId: string; galleryDir: string; deviceUdid?: string | null; account?: string | null;
         musicUrl?: string | null; prompt?: string | null;
         /** Set to fix the hook rather than let the model write one. */
-        hook?: string | null; galleryVideo?: string | null; hookRunId?: string | null;
+        hook?: string | null; hookAlign?: 'left' | 'center' | 'right'; galleryVideo?: string | null; hookRunId?: string | null;
     }): Promise<GenerationRow> {
         const bookmark = await this.bookmark(input.bookmarkId);
         if (!bookmark) throw new ContentStateError('Bookmark not found');
@@ -165,6 +165,7 @@ export class ContentRepository {
             musicUrl: input.musicUrl ?? bookmark.musicUrl,
             prompt: input.prompt?.trim() || null,
             hook: input.hook?.trim() || null,
+            hookAlign: input.hookAlign ?? 'center',
             galleryVideo: input.galleryVideo?.trim() || null,
             hookRunId: input.hookRunId ?? null,
         }).returning();

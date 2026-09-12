@@ -13,8 +13,9 @@ type ContentRepository = import('../src/content/repository.js').ContentRepositor
 
 test('validateHooks accepts a good batch and normalizes it', () => {
     const hooks = validateHooks({ hooks: ['  first  ', 'second\n\nline', 'first', ''] });
-    // Trimmed, blank lines collapsed, duplicates and empties dropped.
-    assert.deepEqual(hooks, ['first', 'second\nline']);
+    // Trimmed, duplicates and empties dropped — but an inner blank line is
+    // deliberate spacing and survives.
+    assert.deepEqual(hooks, ['first', 'second\n\nline']);
     // A bare array is accepted too, since models return both shapes.
     assert.deepEqual(validateHooks(['only']), ['only']);
 });
@@ -32,7 +33,7 @@ test('validateHooks rejects anything the picker could not show', () => {
     reject({ hooks: ['   ', ''] }, /no usable hooks/);
     reject({ hooks: [42] }, /hooks\[0\] must be a string/);
     reject({ hooks: ['x'.repeat(221)] }, /at most 220 characters/);
-    reject({ hooks: [Array.from({ length: 9 }, () => 'line').join('\n')] }, /at most 8 lines/);
+    reject({ hooks: [Array.from({ length: 13 }, () => 'line').join('\n')] }, /at most 12 lines/);
     reject({ hooks: Array.from({ length: 9 }, (_, i) => `hook ${i}`) }, /at most 8 hooks/);
 });
 
@@ -216,4 +217,28 @@ test('a caption that would overflow is trimmed so the hashtags survive', () => {
     const result = applyTemplateHashtags('x'.repeat(2_300), tags);
     assert.ok(result.length <= 2_200, `expected <= 2200, got ${result.length}`);
     assert.match(result, /#fashiontech #wearabletech #healthtracker$/);
+});
+
+// --- blank lines and alignment ---
+
+const { normalizeHook, isHookAlign } = await import('../src/content/plan.js');
+
+test('normalizeHook keeps inner blank lines and trims the outer ones', () => {
+    assert.equal(normalizeHook('  a  \n\n  b  '), 'a\n\nb');
+    assert.equal(normalizeHook('\n\n\nonly\n\n\n'), 'only');
+    assert.equal(normalizeHook('a\r\n\r\nb'), 'a\n\nb');
+    // Several blank lines in a row are spacing too, and are preserved as given.
+    assert.equal(normalizeHook('a\n\n\nb'), 'a\n\n\nb');
+    assert.equal(normalizeHook('   \n  '), '');
+});
+
+test('a suggested hook may span lines with a pause in it', () => {
+    assert.deepEqual(validateHooks({ hooks: ['"how do you focus?"\n\nme:'] }), ['"how do you focus?"\n\nme:']);
+    // Still bounded: too many lines is rejected.
+    assert.throws(() => validateHooks({ hooks: [Array.from({ length: 13 }, () => 'x').join('\n')] }), PlanValidationError);
+});
+
+test('only the three real alignments are accepted', () => {
+    assert.ok(isHookAlign('left') && isHookAlign('center') && isHookAlign('right'));
+    for (const bad of ['justify', 'LEFT', '', null, undefined, 1]) assert.equal(isHookAlign(bad), false);
 });

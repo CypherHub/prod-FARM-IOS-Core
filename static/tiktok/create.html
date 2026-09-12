@@ -18,7 +18,12 @@
         .hook-option { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start;
             border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 10px; padding: 12px 14px; cursor: pointer; }
         .hook-option:has(input:checked) { border-color: var(--accent, #ff365e); background: rgba(255,255,255,0.05); }
-        .hook-option pre { margin: 0; font: inherit; white-space: pre-wrap; }
+        .hook-option pre { margin: 0; font: inherit; white-space: pre-wrap; min-height: 1.2em; }
+        .hook-row { display: grid; gap: 8px; }
+        .align-group { display: flex; gap: 4px; align-items: center; font-size: 0.72rem; opacity: 0.75; }
+        .align-group button { border: 1px solid var(--border, rgba(255,255,255,0.14)); background: transparent;
+            color: inherit; border-radius: 6px; padding: 2px 9px; cursor: pointer; font: inherit; font-size: 0.72rem; }
+        .align-group button[aria-pressed="true"] { background: rgba(255,255,255,0.16); border-color: currentColor; }
         .hook-option .tag { font-size: 0.68rem; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.06em; }
         .batch { display: grid; gap: 14px; margin-top: 16px; }
         .batch-card { border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 12px; padding: 16px 18px; }
@@ -55,17 +60,10 @@
         <div class="steps">
             <section class="step" id="step-1">
                 <h2 class="step-title"><span class="step-badge">1</span>Write the hooks</h2>
-                <p class="field-help">The hook is the on-screen text. Ask for suggestions, write your own, or both.</p>
-                <div class="split">
-                    <div class="field">
-                        <label for="gallery">Gallery</label>
-                        <select id="gallery"></select>
-                        <p class="field-help" id="gallery-help"></p>
-                    </div>
-                    <div class="field">
-                        <label for="prompt">Extra instructions (optional)</label>
-                        <textarea id="prompt" rows="3" placeholder="e.g. lean funnier, mention the Kickstarter price"></textarea>
-                    </div>
+                <p class="field-help">The hook is the on-screen text. Ask for suggestions, write your own, or both. A blank line between lines is kept as a pause.</p>
+                <div class="field wide">
+                    <label for="prompt">Extra instructions (optional)</label>
+                    <textarea id="prompt" rows="3" placeholder="e.g. lean funnier, mention the Kickstarter price"></textarea>
                 </div>
                 <div class="form-actions">
                     <button class="button primary" id="suggest" type="button">Suggest 5 hooks</button>
@@ -85,6 +83,11 @@
 
             <section class="step" id="step-3">
                 <h2 class="step-title"><span class="step-badge">3</span>Build</h2>
+                <div class="field">
+                    <label for="gallery">Gallery</label>
+                    <select id="gallery"></select>
+                    <p class="field-help" id="gallery-help"></p>
+                </div>
                 <div class="split">
                     <div class="field" id="clip-field">
                         <label for="clip">Source clip</label>
@@ -149,10 +152,17 @@
                 return;
             }
             el.hooks.innerHTML = `<div class="hook-list">${state.hooks.map((hook, index) => `
-                <label class="hook-option">
-                    <input type="checkbox" data-index="${index}" ${hook.selected ? 'checked' : ''}>
-                    <span>${hook.custom ? '<span class="tag">yours</span><br>' : ''}<pre>${escapeHtml(hook.text)}</pre></span>
-                </label>`).join('')}</div>`;
+                <div class="hook-option">
+                    <input type="checkbox" data-index="${index}" ${hook.selected ? 'checked' : ''} aria-label="Use this hook">
+                    <div class="hook-row">
+                        ${hook.custom ? '<span class="tag">yours</span>' : ''}
+                        <pre style="text-align:${hook.align}">${escapeHtml(hook.text)}</pre>
+                        <span class="align-group" data-align-for="${index}">Align
+                            ${['left', 'center', 'right'].map((align) =>
+                                `<button type="button" data-align="${align}" aria-pressed="${hook.align === align}">${align}</button>`).join('')}
+                        </span>
+                    </div>
+                </div>`).join('')}</div>`;
             for (const box of el.hooks.querySelectorAll('[data-index]')) {
                 box.addEventListener('change', () => {
                     // Mutate state and update the count only. Rebuilding the list
@@ -161,13 +171,36 @@
                     refreshCreateButton();
                 });
             }
+
+            for (const group of el.hooks.querySelectorAll('[data-align-for]')) {
+                const hook = state.hooks[Number(group.dataset.alignFor)];
+                const preview = group.parentElement.querySelector('pre');
+                for (const button of group.querySelectorAll('[data-align]')) {
+                    button.addEventListener('click', () => {
+                        // Again: mutate and repaint just this row, never the list.
+                        hook.align = button.dataset.align;
+                        preview.style.textAlign = hook.align;
+                        for (const sibling of group.querySelectorAll('[data-align]')) {
+                            sibling.setAttribute('aria-pressed', String(sibling.dataset.align === hook.align));
+                        }
+                    });
+                }
+            }
             refreshCreateButton();
         }
 
+        /** Keeps blank lines between lines — they are deliberate spacing on screen. */
+        function normalizeHook(raw) {
+            const lines = String(raw).replace(/\r\n?/g, '\n').split('\n').map((line) => line.trim());
+            while (lines.length && lines[0] === '') lines.shift();
+            while (lines.length && lines[lines.length - 1] === '') lines.pop();
+            return lines.join('\n');
+        }
+
         function addHook(text, custom = false) {
-            const clean = String(text).split('\n').map((line) => line.trim()).filter(Boolean).join('\n');
+            const clean = normalizeHook(text);
             if (!clean || state.hooks.some((hook) => hook.text === clean)) return;
-            const entry = { text: clean, custom, selected: custom };
+            const entry = { text: clean, custom, selected: custom, align: 'center' };
             if (custom) state.hooks.unshift(entry); else state.hooks.push(entry);
         }
 
@@ -272,7 +305,7 @@
                     body: JSON.stringify({
                         gallery: el.gallery.value,
                         prompt: el.prompt.value,
-                        hooks: selectedHooks().map((hook) => hook.text),
+                        hooks: selectedHooks().map((hook) => ({ text: hook.text, align: hook.align })),
                         galleryVideo: el.clip.value || undefined,
                         hookRunId: state.hookRunId || undefined,
                         deviceUdid, account,

@@ -383,6 +383,7 @@ export async function generatePost(
                 trimStartSeconds: plan.trimStartSeconds,
                 durationSeconds: targetSeconds,
                 hook: plan.hook,
+                hookAlign: generation.hookAlign ?? 'center',
                 outputPath: path.join(outputDir, 'post.mp4'),
             });
             await rm(path.join(outputDir, '.overlay.png'), { force: true });

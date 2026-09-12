@@ -43,6 +43,13 @@
       "when": 1789170372892,
       "tag": "0005_graceful_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789174985822,
+      "tag": "0006_left_tempest",
+      "breakpoints": true
     }
   ]
 }

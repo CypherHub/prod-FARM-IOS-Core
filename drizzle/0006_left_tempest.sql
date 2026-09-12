@@ -1,0 +1,2 @@
+CREATE TYPE "scheduler"."hook_align" AS ENUM('left', 'center', 'right');--> statement-breakpoint
+ALTER TABLE "scheduler"."generations" ADD COLUMN "hook_align" "scheduler"."hook_align" DEFAULT 'center' NOT NULL;

@@ -14,6 +14,7 @@ export const generationStatus = schedulerSchema.enum('generation_status', [
     'pending', 'generating', 'ready', 'failed', 'queued',
 ]);
 export const hookRunStatus = schedulerSchema.enum('hook_run_status', ['pending', 'generating', 'ready', 'failed']);
+export const hookAlign = schedulerSchema.enum('hook_align', ['left', 'center', 'right']);
 
 const taskColumns = {
     pluginId: text('plugin_id').notNull(),
@@ -135,6 +136,8 @@ export const generations = schedulerSchema.table('generations', {
      * writes one and it is saved here.
      */
     hook: text('hook'), prompt: text('prompt'),
+    /** How the hook is set on screen. */
+    hookAlign: hookAlign('hook_align').notNull().default('center'),
     /** Which suggestion batch this came from, and the operator's chosen source clip. */
     hookRunId: uuid('hook_run_id').references(() => hookRuns.id, { onDelete: 'set null' }),
     galleryVideo: text('gallery_video'),

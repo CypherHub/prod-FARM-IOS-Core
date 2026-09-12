@@ -211,3 +211,35 @@ test('the hook is placed on the picture, not on the letterbox bars', () => {
     assert.ok(firstY > box.top && firstY < box.top + box.height,
         `expected the hook inside ${box.top}..${box.top + box.height}, got ${firstY}`);
 });
+
+test('a hook keeps blank lines between lines as vertical spacing', () => {
+    const svg = hookSvg('"how do you focus?"\n\nme:');
+    const ys = [...svg.matchAll(/<text[^>]*\sy="(\d+)"/g)].map((match) => Number(match[1]));
+    // Two rendered lines; the blank one emits no <text> but still advances.
+    assert.equal(ys.length, 2);
+    const gap = ys[1] - ys[0];
+    const tight = hookSvg('"how do you focus?"\nme:');
+    const tightYs = [...tight.matchAll(/<text[^>]*\sy="(\d+)"/g)].map((match) => Number(match[1]));
+    assert.ok(gap > tightYs[1] - tightYs[0], 'a blank line must open a bigger gap than none');
+    // Leading and trailing blanks are still trimmed away.
+    assert.equal([...hookSvg('\n\nonly\n\n').matchAll(/<text/g)].length, 1);
+});
+
+test('hook alignment moves the anchor and the x position', () => {
+    const anchor = (svg: string) => /text-anchor="([a-z]+)"/.exec(svg)?.[1];
+    const x = (svg: string) => Number(/<text x="(\d+)"/.exec(svg)?.[1]);
+    const box = { top: 0, height: SLIDE_HEIGHT };
+
+    const centred = hookSvg('hook', SLIDE_WIDTH, SLIDE_HEIGHT, box, 'center');
+    const left = hookSvg('hook', SLIDE_WIDTH, SLIDE_HEIGHT, box, 'left');
+    const right = hookSvg('hook', SLIDE_WIDTH, SLIDE_HEIGHT, box, 'right');
+
+    assert.equal(anchor(centred), 'middle');
+    assert.equal(anchor(left), 'start');
+    assert.equal(anchor(right), 'end');
+    assert.equal(x(centred), SLIDE_WIDTH / 2);
+    assert.ok(x(left) < SLIDE_WIDTH / 2 && x(left) > 0, 'left sits inside the margin');
+    assert.ok(x(right) > SLIDE_WIDTH / 2 && x(right) < SLIDE_WIDTH, 'right sits inside the margin');
+    // Centre is the default.
+    assert.equal(anchor(hookSvg('hook', SLIDE_WIDTH, SLIDE_HEIGHT, box)), 'middle');
+});

@@ -14,6 +14,7 @@ import {
     listGalleryItems, resolveGalleryFile, resolveGalleryRoot, sanitizeUploadName, uniqueFileName,
 } from './gallery.js';
 import { dataRoot, resolveWithinDataRoot } from './paths.js';
+import { isHookAlign, normalizeHook } from './plan.js';
 import { ContentRepository, ContentStateError } from './repository.js';
 
 /** What a finished generation leaves in its output folder. */
@@ -254,7 +255,8 @@ export function registerContentRoutes(context: PluginRouteContext, repository?: 
         Params: { id: string };
         Body: {
             gallery?: string; galleryDir?: string; deviceUdid?: string; account?: string;
-            prompt?: string; hooks?: string[]; galleryVideo?: string; hookRunId?: string;
+            prompt?: string; hooks?: Array<string | { text?: string; align?: string }>;
+            galleryVideo?: string; hookRunId?: string;
         };
     }>('/api/bookmarks/:id/generate', async (request, reply) => {
         try {
@@ -265,10 +267,14 @@ export function registerContentRoutes(context: PluginRouteContext, repository?: 
                 ? resolveGalleryRoot(named)
                 : path.resolve(request.body?.galleryDir?.trim() || process.env.CONTENT_GALLERY_DIR || 'gallery');
 
+            // A hook arrives either as bare text or as { text, align }.
             const chosen = (request.body?.hooks ?? [])
-                .filter((hook): hook is string => typeof hook === 'string')
-                .map((hook) => hook.trim())
-                .filter(Boolean);
+                .map((entry) => (typeof entry === 'string' ? { text: entry, align: undefined } : entry ?? {}))
+                .map((entry) => ({
+                    text: normalizeHook(String(entry.text ?? '')),
+                    align: isHookAlign(entry.align) ? entry.align : 'center' as const,
+                }))
+                .filter((entry) => entry.text);
             if (chosen.length > MAX_HOOKS_PER_BATCH) {
                 return reply.code(400).send({ error: `Choose at most ${MAX_HOOKS_PER_BATCH} hooks` });
             }
@@ -284,9 +290,11 @@ export function registerContentRoutes(context: PluginRouteContext, repository?: 
             };
 
             // No hooks chosen means the old one-shot behaviour: the model writes one.
-            const hooks = chosen.length > 0 ? chosen : [null];
+            const hooks = chosen.length > 0 ? chosen : [{ text: null, align: 'center' as const }];
             const created = [];
-            for (const hook of hooks) created.push(await content.createGeneration({ ...shared, hook }));
+            for (const hook of hooks) {
+                created.push(await content.createGeneration({ ...shared, hook: hook.text, hookAlign: hook.align }));
+            }
             return reply.code(202).send({ generations: created });
         } catch (error) {
             return reply.code(statusFor(error)).send({ error: message(error) });

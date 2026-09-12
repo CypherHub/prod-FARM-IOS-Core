@@ -5,7 +5,7 @@ import path from 'node:path';
 import { runClaude } from './claude.js';
 import { referenceBlock, type ReferenceInput } from './generate.js';
 import { resolveWithinDataRoot } from './paths.js';
-import { MAX_HOOK_LENGTH, MAX_LINES_PER_SLIDE, PlanValidationError } from './plan.js';
+import { assertHook, normalizeHook, PlanValidationError } from './plan.js';
 import type { ContentRepository } from './repository.js';
 
 /** How many suggestions the model is asked for, and the ceiling we will accept. */
@@ -29,12 +29,9 @@ export function validateHooks(raw: unknown): string[] {
     const hooks: string[] = [];
     for (const [index, entry] of list.entries()) {
         if (typeof entry !== 'string') throw new PlanValidationError(`hooks[${index}] must be a string`);
-        const hook = entry.split('\n').map((line) => line.trim()).filter(Boolean).join('\n');
+        const hook = normalizeHook(entry);
         if (!hook) continue;
-        if (hook.length > MAX_HOOK_LENGTH) throw new PlanValidationError(`hooks[${index}] must be at most ${MAX_HOOK_LENGTH} characters`);
-        if (hook.split('\n').length > MAX_LINES_PER_SLIDE) {
-            throw new PlanValidationError(`hooks[${index}] must be at most ${MAX_LINES_PER_SLIDE} lines`);
-        }
+        assertHook(hook, `hooks[${index}]`);
         // The picker is a list of choices; duplicates waste a slot.
         if (!hooks.includes(hook)) hooks.push(hook);
     }
@@ -54,8 +51,9 @@ export function buildHookPrompt(input: ReferenceInput & { kind: 'slideshow' | 'v
         '',
         ...referenceBlock(input),
         '',
-        `The hook is ${surface}, so keep each one to one or two short lines that a viewer can`,
-        'read at a glance.',
+        `The hook is ${surface}, so keep each one short enough to read at a glance.`,
+        'A hook may span several lines, and a blank line between lines is allowed when',
+        'the pause helps it land — for example a question, a blank line, then the punchline.',
         '',
         'Your job:',
         `1. Look at the reference material in ./bookmark to see what the post is doing.`,
