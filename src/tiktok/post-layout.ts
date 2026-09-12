@@ -49,6 +49,30 @@ export function newestPickerCell(layout: PickerLayout): PickerTarget {
     return { x: layout.circleX - 52, y: layout.firstY - 40 };
 }
 
+export interface VideoPickerLayout {
+    cellX: number;
+    cellStep: number;
+    firstY: number;
+    rowStep: number;
+}
+
+export function videoPickerCell(column: number, row: number, picker: VideoPickerLayout): PickerTarget {
+    const col = Math.max(0, Math.min(2, column));
+    const gridRow = Math.max(0, row);
+    return {
+        x: picker.cellX + col * picker.cellStep,
+        y: picker.firstY - 40 + gridRow * picker.rowStep,
+    };
+}
+
+// Quantize a tap onto the nearest of the 3 columns. The last row may have
+// 1, 2, or 3 filled cells — do not force the far-right column.
+export function snapToVideoPickerCell(point: PickerTarget, picker: VideoPickerLayout): PickerTarget {
+    const column = Math.round((point.x - picker.cellX) / picker.cellStep);
+    const row = Math.round((point.y - (picker.firstY - 40)) / picker.rowStep);
+    return videoPickerCell(column, row, picker);
+}
+
 export function recentPickerTargets(assetCount: number, count: number, layout: PickerLayout): PickerTarget[] {
     if (!Number.isSafeInteger(assetCount) || assetCount < count || count < 1) {
         throw new Error('Photos asset count cannot satisfy the requested media selection');

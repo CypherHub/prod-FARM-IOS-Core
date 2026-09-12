@@ -4,7 +4,7 @@ import test from 'node:test';
 import sharp from 'sharp';
 
 import { assignTopSlideMatches, matchSlidesInPicker, slideCropTemplates } from '../src/tiktok/picker-match.js';
-import { newestPickerCell, pickerCircle, pickerScrollSwipe, circledPickerCells, type PickerLayout } from '../src/tiktok/post-layout.js';
+import { newestPickerCell, snapToVideoPickerCell, videoPickerCell, pickerCircle, pickerScrollSwipe, circledPickerCells, type PickerLayout } from '../src/tiktok/post-layout.js';
 
 const layout: PickerLayout = { circleX: 122, columnStep: 138, firstY: 270, trayY: 270, rowStep: 139 };
 
@@ -37,6 +37,16 @@ test('pickerCircle is the top-right selection mark on a Recents cell', () => {
     assert.equal(circledPickerCells(layout, 3).length, 9);
     assert.equal(circledPickerCells(layout, 4).length, 12);
     assert.deepEqual(newestPickerCell(layout), { x: 70, y: 230 });
+});
+
+test('snapToVideoPickerCell keeps the last filled column on a short bottom row', () => {
+    const picker = { cellX: 68, cellStep: 168, firstY: 270, rowStep: 139 };
+    assert.deepEqual(videoPickerCell(0, 3, picker), { x: 68, y: 647 });
+    assert.deepEqual(videoPickerCell(1, 3, picker), { x: 236, y: 647 });
+    assert.deepEqual(videoPickerCell(2, 3, picker), { x: 404, y: 647 });
+    assert.deepEqual(snapToVideoPickerCell({ x: 80, y: 760 }, picker), { x: 68, y: 786 });
+    assert.deepEqual(snapToVideoPickerCell({ x: 240, y: 760 }, picker), { x: 236, y: 786 });
+    assert.deepEqual(snapToVideoPickerCell({ x: 390, y: 700 }, picker), { x: 404, y: 647 });
 });
 
 test('matchSlidesInPicker finds the newest copy of each still', async () => {

@@ -4,6 +4,7 @@ import type { Browser } from 'webdriverio';
 
 import type { WdaRemoteControl } from '@git-agni/phone-farm-core';
 import { findHandleMatch, pointFromWord, recognizeWords, type OcrWord } from './ocr.js';
+import { isCaptionComposer, isLiveCamera, isMediaPicker, isVideoEditorStoryBar } from './post-camera.js';
 
 export async function tapCoordinate(driver: Browser, x: number, y: number, label: string): Promise<void> {
     await driver.performActions([{
@@ -80,7 +81,42 @@ export async function switchTikTokAccount(
     await driver.pause(2000);
 
     const { scale } = await remote.getScreenInfo(udid);
-    const profileWords = await recognizeWords(await remote.getScreenshot(udid));
+    let profileWords = await recognizeWords(await remote.getScreenshot(udid));
+    for (let escape = 1; escape <= 4; escape += 1) {
+        const stuck = isMediaPicker(profileWords)
+            || isCaptionComposer(profileWords)
+            || isVideoEditorStoryBar(profileWords)
+            || isLiveCamera(profileWords);
+        if (!stuck) break;
+        const text = profileWords.map((word) => word.text.toLowerCase().replace(/[’']/g, "'")).join(' ');
+        console.log(`Escaping leftover TikTok UI before account switch (${escape}/4)`);
+        if (isCaptionComposer(profileWords) && text.includes('hashtags') && (text.includes('space') || text.includes('123') || text.includes('mention'))) {
+            await tapCoordinate(driver, 207, 480, 'Dismiss leftover caption keyboard');
+            await driver.pause(800);
+        }
+        if (isCaptionComposer(profileWords) && !text.includes('hashtags')) {
+            await tapCoordinate(driver, 108, 846, 'Save leftover draft before account switch');
+            await driver.pause(1_500);
+        } else {
+            await tapCoordinate(driver, 24, 56, 'Close leftover TikTok sheet before account switch');
+            await driver.pause(1_200);
+            const dialog = await recognizeWords(await remote.getScreenshot(udid));
+            const dialogText = dialog.map((word) => word.text.toLowerCase().replace(/[’']/g, "'")).join(' ');
+            if (dialogText.includes('continue editing') || (dialogText.includes('save') && dialogText.includes('draft'))) {
+                const save = dialog.find((word) => word.text.toLowerCase().includes('save'));
+                if (save) {
+                    const point = pointFromWord(save, scale);
+                    await tapCoordinate(driver, point.x, point.y, 'Save leftover draft dialog');
+                } else {
+                    await tapCoordinate(driver, 207, 520, 'Save leftover draft dialog (fallback)');
+                }
+                await driver.pause(1_500);
+            }
+        }
+        await tapCoordinate(driver, coords.profileTabX, coords.profileTabY, 'Profile tab');
+        await driver.pause(1_500);
+        profileWords = await recognizeWords(await remote.getScreenshot(udid));
+    }
 
     if (findHandleMatch(profileWords, targetHandle)) {
         console.log(`Already on TikTok account ${targetHandle}`);

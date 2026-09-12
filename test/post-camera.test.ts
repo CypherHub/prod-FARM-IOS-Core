@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isCaptionComposer, isLiveCamera, isTextStoryComposer, isVideoEditorStoryBar, lowestExactWord } from '../src/tiktok/post-camera.js';
-import type { OcrWord } from '../src/tiktok/ocr.js';
+import { findHandleMatch, type OcrWord } from '../src/tiktok/ocr.js';
+import { isCaptionComposer, isLiveCamera, isMediaPicker, isTextStoryComposer, isVideoEditorStoryBar, lowestExactWord } from '../src/tiktok/post-camera.js';
 
 function word(text: string, y = 0): OcrWord {
     return { text, x: 0, y, width: 10, height: 10, confidence: 90 };
@@ -28,9 +28,29 @@ test('caption composer is Drafts/Post, not Your Story', () => {
     assert.equal(isVideoEditorStoryBar(caption), false);
 });
 
+test('caption composer with open keyboard still counts as leftover caption', () => {
+    const keyboardCaption = [
+        word('Preview'), word('Edit'), word('cover'), word('Hashtags'), word('Mention'),
+        word('q'), word('w'), word('e'), word('space'), word('123'),
+    ];
+    assert.equal(isCaptionComposer(keyboardCaption), true);
+});
+
 test('isLiveCamera detects leftover LIVE composer', () => {
     assert.equal(isLiveCamera([word('Go'), word('LIVE'), word('Check'), word('LIVE'), word('access')]), true);
+    assert.equal(isLiveCamera([word('Try'), word('practice'), word('mode'), word('Devicecamera'), word('CREATE'), word('LIVE')]), true);
     assert.equal(isLiveCamera([word('PHOTO'), word('POST')]), false);
+});
+
+test('isMediaPicker detects Recents / Select multiple, not the editor', () => {
+    assert.equal(isMediaPicker([word('Recents'), word('Videos'), word('Photos'), word('Select'), word('multiple')]), true);
+    assert.equal(isMediaPicker([word('Add'), word('sound'), word('AutoCut')]), false);
+    assert.equal(isMediaPicker([word('Add'), word('description...'), word('Drafts'), word('Post')]), false);
+});
+
+test('findHandleMatch ignores OCR punctuation in a TikTok handle', () => {
+    const match = findHandleMatch([word("my_sane_'tea")], '@my_sane_tea');
+    assert.equal(match?.text, "my_sane_'tea");
 });
 
 test('lowestExactWord prefers the camera-tab POST over an earlier Post', () => {

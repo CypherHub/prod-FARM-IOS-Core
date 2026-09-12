@@ -28,12 +28,26 @@ export function isCaptionComposer(words: Array<{ text: string }>): boolean {
     return text.includes('everyone can view')
         || text.includes('add description')
         || text.includes('catchy')
-        || (text.includes('drafts') && text.includes('post'));
+        || (text.includes('drafts') && text.includes('post'))
+        // Keyboard-open caption: Drafts/Post are hidden, but Edit cover / Hashtags / Mention remain.
+        || (text.includes('edit') && text.includes('cover') && (text.includes('hashtags') || text.includes('mention')))
+        || (text.includes('hashtags') && text.includes('mention') && (text.includes('space') || text.includes('123')));
 }
 
 export function isLiveCamera(words: Array<{ text: string }>): boolean {
     const text = composerText(words);
-    return text.includes('go live') || text.includes('check live');
+    const compact = text.replace(/\s+/g, '');
+    return text.includes('go live')
+        || text.includes('check live')
+        || text.includes('practice mode')
+        || compact.includes('devicecamera')
+        || compact.includes('golive');
+}
+
+export function isMediaPicker(words: Array<{ text: string }>): boolean {
+    const text = composerText(words);
+    return text.includes('select multiple')
+        || (text.includes('recents') && (text.includes('videos') || text.includes('photos')));
 }
 
 // Bottom-most exact match so "POST" the camera tab wins over a stray "Post".

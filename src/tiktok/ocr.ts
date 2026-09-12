@@ -48,7 +48,7 @@ export async function recognizeWords(image: Buffer): Promise<OcrWord[]> {
 }
 
 function normalizeHandle(handle: string): string {
-    return handle.trim().toLowerCase().replace(/^@/, '');
+    return handle.trim().toLowerCase().replace(/^@/, '').replace(/[^a-z0-9._]/g, '');
 }
 
 // Exact match first; substring containment as a fuzzy fallback for OCR

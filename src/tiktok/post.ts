@@ -12,23 +12,37 @@ import { pointFromWord, recognizeWords } from './ocr.js';
 import { SELECT_MULTIPLE_SELECTORS } from './checkbox.js';
 import { newestPickerCell, pickerCircle, recentPickerTargets, type PickerLayout } from './post-layout.js';
 import { splitComposerCopy } from './post-compose.js';
-import { isCaptionComposer, isLiveCamera, isTextStoryComposer, isVideoEditorStoryBar, lowestExactWord } from './post-camera.js';
+import { isCaptionComposer, isLiveCamera, isMediaPicker, isTextStoryComposer, isVideoEditorStoryBar, lowestExactWord } from './post-camera.js';
 import { redCheckboxPixelCount } from './pixel.js';
+import { deepSeekConfig } from './vision-guide.js';
+import { annotateTap } from './vision-debug.js';
+import { finishVideoVisionPost, runVideoVisionToCaption } from './vision-post.js';
 
-const DEBUG_SHOT_DIR = process.env.DEBUG_SHOT_DIR;
+const DEBUG_SHOT_DIR = process.env.DEBUG_SHOT_DIR
+    ?? path.resolve('.wda', 'vision-shots', new Date().toISOString().replace(/[:.]/g, '-'));
 let debugShotIndex = 0;
 let debugRemote: WdaRemoteControl | undefined;
 let debugUdid: string | undefined;
 
-async function debugShot(label: string): Promise<void> {
+async function debugShot(
+    label: string,
+    options?: { image?: Buffer; tap?: { x: number; y: number }; scale?: number; label?: string },
+): Promise<void> {
     if (!DEBUG_SHOT_DIR || !debugRemote || !debugUdid) return;
     try {
         await mkdir(DEBUG_SHOT_DIR, { recursive: true });
         debugShotIndex += 1;
         const safe = label.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 70);
         const file = path.join(DEBUG_SHOT_DIR, `${String(debugShotIndex).padStart(2, '0')}-${safe}.png`);
-        await writeFile(file, await debugRemote.getScreenshot(debugUdid));
-        console.log(`Debug screenshot ${path.basename(file)}`);
+        let png = options?.image ?? await debugRemote.getScreenshot(debugUdid);
+        if (options?.tap) {
+            png = await annotateTap(png, options.tap, {
+                scale: options.scale,
+                label: options.label ?? `${options.tap.x},${options.tap.y}`,
+            });
+        }
+        await writeFile(file, png);
+        console.log(`Debug screenshot ${path.basename(file)}${options?.tap ? ` tap=(${options.tap.x},${options.tap.y})` : ''}`);
     } catch (error) {
         console.log(`Debug screenshot skipped: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -138,8 +152,18 @@ async function waitUntilFeedReady(driver: Browser, remote: WdaRemoteControl, udi
     // Do not query TikTok's accessibility tree on the For You feed — predicate
     // finds snapshot the whole video UI and have hung WDA for minutes.
     for (let attempt = 1; attempt <= 12; attempt += 1) {
-        const { scale } = await remote.getScreenInfo(udid);
-        const screenshot = await remote.getScreenshot(udid);
+        let scale: number;
+        let screenshot: Buffer;
+        try {
+            ({ scale } = await remote.getScreenInfo(udid));
+            screenshot = await remote.getScreenshot(udid);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (!/aborted|timeout|ETIMEDOUT|ECONNRESET/i.test(message)) throw error;
+            console.log(`TikTok feed check timed out (${attempt}/12): ${message}`);
+            await driver.pause(1_200);
+            continue;
+        }
         const words = await recognizeWords(screenshot);
         const text = words.map((word) => word.text.toLowerCase().replace(/[’]/g, "'")).join(' ');
         let dismissed = false;
@@ -157,13 +181,25 @@ async function waitUntilFeedReady(driver: Browser, remote: WdaRemoteControl, udi
         if (text.includes('cancel') && (text.includes('search') || text.includes('fearch') || text.includes('autofill') || text.includes('sounds'))) {
             dismissed = await tapOcrWord(driver, words, scale, ['cancel'], 'Cancel') || dismissed;
         }
-        if (text.includes('recents') && (text.includes('select multiple') || text.includes('use layout'))) {
+        if (isMediaPicker(words) || (text.includes('recents') && (text.includes('select multiple') || text.includes('use layout')))) {
             dismissed = await tapOcrWord(driver, words, scale, ['x'], 'Close leftover picker')
                 || (await tapCoordinate(driver, 22, 58, 'Close leftover picker'), true);
         }
-        if (text.includes('everyone can view') || text.includes('descriptionideas') || (text.includes('add link') && text.includes('location'))) {
+        if (isCaptionComposer(words) || text.includes('everyone can view') || text.includes('descriptionideas') || (text.includes('add link') && text.includes('location'))
+            || (text.includes('edit') && text.includes('cover') && text.includes('hashtags'))) {
+            if (text.includes('hashtags') && (text.includes('space') || text.includes('123') || text.includes('mention'))) {
+                await tapCoordinate(driver, 207, 480, 'Dismiss leftover caption keyboard');
+                await driver.pause(800);
+            }
             dismissed = await tapOcrWord(driver, words, scale, ['x'], 'Close leftover composer')
                 || (await tapCoordinate(driver, 24, 56, 'Close leftover composer'), true);
+            await driver.pause(800);
+            const afterWords = await recognizeWords(await remote.getScreenshot(udid));
+            const after = afterWords.map((word) => word.text.toLowerCase().replace(/[’']/g, "'")).join(' ');
+            if (after.includes('continue editing') || (after.includes('save') && after.includes('draft'))) {
+                await tapOcrWord(driver, afterWords, scale, ['save'], 'Save leftover draft')
+                    || (await tapCoordinate(driver, 207, 520, 'Save leftover draft (fallback)'), true);
+            }
         }
         if (text.includes('select all') && text.includes('cancel') && text.includes('draft')) {
             dismissed = await tapOcrWord(driver, words, scale, ['cancel'], 'Close leftover drafts list')
@@ -273,6 +309,26 @@ async function ensureVideoMode(
     await debugShot('video-mode');
 }
 
+async function openMusicIfRequested(driver: Browser, musicUrl: string | undefined): Promise<void> {
+    if (!musicUrl) return;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+        console.log(`Opening music URL: ${musicUrl}`);
+        await driver.execute('mobile: deepLink', { url: musicUrl });
+        await driver.pause(8000);
+        await dismissComposerBlockers(driver);
+        const sound = await firstDisplayed(driver, USE_SOUND_SELECTORS);
+        if (sound) {
+            await sound.click();
+            console.log('Tapped Use this sound');
+            await debugShot('use-this-sound');
+            return;
+        }
+        await debugShot(`music-missing-${attempt}`);
+        if (attempt === 3) throw new Error('TikTok control not found: Use this sound');
+        console.log(`Use this sound not on screen (attempt ${attempt}/3); retrying deep link`);
+    }
+}
+
 async function openComposer(
     driver: Browser,
     remote: WdaRemoteControl,
@@ -282,22 +338,7 @@ async function openComposer(
     slideshow: boolean,
 ): Promise<void> {
     if (musicUrl) {
-        for (let attempt = 1; attempt <= 3; attempt += 1) {
-            console.log(`Opening music URL: ${musicUrl}`);
-            await driver.execute('mobile: deepLink', { url: musicUrl });
-            await driver.pause(8000);
-            await dismissComposerBlockers(driver);
-            const sound = await firstDisplayed(driver, USE_SOUND_SELECTORS);
-            if (sound) {
-                await sound.click();
-                console.log('Tapped Use this sound');
-                await debugShot('use-this-sound');
-                break;
-            }
-            await debugShot(`music-missing-${attempt}`);
-            if (attempt === 3) throw new Error('TikTok control not found: Use this sound');
-            console.log(`Use this sound not on screen (attempt ${attempt}/3); retrying deep link`);
-        }
+        await openMusicIfRequested(driver, musicUrl);
     } else {
         await driver.activateApp(process.env.TIKTOK_BUNDLE_ID ?? 'com.zhiliaoapp.musically');
         await driver.pause(2500);
@@ -574,7 +615,9 @@ async function advanceVideoEditorToCaption(
     udid: string,
     coordinates: TikTokCoordinates['tiktok'],
 ): Promise<void> {
-    for (let attempt = 1; attempt <= 4; attempt += 1) {
+    // OCR on the dark Your Story | Next bar routinely misses those words
+    // (and AutoCut). After the picker closes, tap the calibrated Next.
+    for (let attempt = 1; attempt <= 8; attempt += 1) {
         const { scale } = await remote.getScreenInfo(udid);
         const words = await recognizeWords(await remote.getScreenshot(udid));
         if (isCaptionComposer(words)) {
@@ -582,19 +625,22 @@ async function advanceVideoEditorToCaption(
             await debugShot('caption-screen');
             return;
         }
-        if (isVideoEditorStoryBar(words) || lowestExactWord(words, 'next')) {
-            const next = lowestExactWord(words, 'next');
-            if (next) {
-                const point = pointFromWord(next, scale);
-                await tapCoordinate(driver, point.x, point.y, 'editor Next');
-            } else {
-                await tapCoordinate(driver, coordinates.finish.x, coordinates.draft.y, 'editor Next (Your Story bar)');
-            }
-            await driver.pause(3000);
-            await debugShot(`video-editor-next-${attempt}`);
+        if (isMediaPicker(words)) {
+            console.log(`Still on the media picker after the video tap (${attempt}/8)`);
+            await debugShot(`video-picker-wait-${attempt}`);
+            await driver.pause(1500);
             continue;
         }
-        throw new Error('Expected the video editor (Your Story | Next) after picking a video');
+        const next = lowestExactWord(words, 'next')
+            ?? words.find((word) => /^next/i.test(word.text.replace(/[^A-Za-z]/g, '')));
+        if (next) {
+            const point = pointFromWord(next, scale);
+            await tapCoordinate(driver, point.x, point.y, 'editor Next');
+        } else {
+            await tapCoordinate(driver, coordinates.editorNext.x, coordinates.editorNext.y, 'editor Next (OCR-blind)');
+        }
+        await driver.pause(3000);
+        await debugShot(`video-editor-next-${attempt}`);
     }
     throw new Error('Could not reach the TikTok caption screen from the video editor');
 }
@@ -762,13 +808,19 @@ if (switchAccountName && !allowedAccounts.includes(switchAccountName)) {
     throw new Error(`TikTok account "${switchAccountName}" is not listed in devices.json for device ${manifest.device.udid}`);
 }
 
+const slideshow = manifest.files.every((file) => file.mimeType.startsWith('image/'));
+if (!slideshow) deepSeekConfig();
+
 const deviceRemote = new WdaRemoteControl({
     deviceUdid: manifest.device.udid,
     passcode: await passcodeForDevice(manifest.device.udid),
     passcodeKeypadLayout: coordinates.passcodeKeypad,
+    // activateApp + first screenshot after unlock often exceeds the 10s WDA default.
+    timeoutMs: 30_000,
 });
 debugRemote = deviceRemote;
 debugUdid = manifest.device.udid;
+console.log(`Debug screenshots: ${DEBUG_SHOT_DIR}`);
 console.log('Checking device lock state');
 await deviceRemote.unlock(manifest.device.udid);
 
@@ -795,7 +847,6 @@ if (process.env.WDA_URL) {
 // launch is welcome / choose-your-interests. Caption entry and the final
 // Post/Drafts tap are NOT retried: retrying after that risks a duplicate
 // post or draft, which is worse than a single clean failure.
-const slideshow = manifest.files.every((file) => file.mimeType.startsWith('image/'));
 const REACH_CAPTION_SCREEN_ATTEMPTS = 3;
 let driver: Browser | undefined;
 let reachedCaptionScreen = false;
@@ -817,15 +868,39 @@ for (let attempt = 1; attempt <= REACH_CAPTION_SCREEN_ATTEMPTS && !reachedCaptio
         await driver.setTimeout({ implicit: 0 });
         await foregroundTikTok(driver, bundleId);
         await driver.pause(2000);
-        await waitUntilFeedReady(driver, deviceRemote, manifest.device.udid);
+        try {
+            await waitUntilFeedReady(driver, deviceRemote, manifest.device.udid);
+        } catch (error) {
+            console.log(`Feed ready check failed, continuing: ${error instanceof Error ? error.message : String(error)}`);
+        }
         if (switchAccountName) {
             console.log(`Switching to TikTok account "${switchAccountName}"`);
             await driver.pause(1000);
             await switchTikTokAccount(driver, deviceRemote, manifest.device.udid, switchAccountName, accountSwitchCoords);
             await debugShot('account-switched');
         }
-        await openComposer(driver, deviceRemote, manifest.device.udid, tiktokCoordinates, manifest.musicUrl, slideshow);
-        await chooseRecentMedia(driver, deviceRemote, manifest.device.udid, manifest.files.length, assetCount, tiktokCoordinates, slideshow);
+        if (slideshow) {
+            await openComposer(driver, deviceRemote, manifest.device.udid, tiktokCoordinates, manifest.musicUrl, slideshow);
+            await chooseRecentMedia(driver, deviceRemote, manifest.device.udid, manifest.files.length, assetCount, tiktokCoordinates, slideshow);
+        } else {
+            await openMusicIfRequested(driver, manifest.musicUrl);
+            await runVideoVisionToCaption({
+                driver,
+                remote: deviceRemote,
+                udid: manifest.device.udid,
+                manifest,
+                typeKeys,
+                debugShot,
+                finishPoint: manifest.destination === 'publish' ? tiktokCoordinates.finish : tiktokCoordinates.draft,
+                videoPicker: {
+                    cellX: tiktokCoordinates.picker.cellX,
+                    cellStep: tiktokCoordinates.picker.cellStep,
+                    firstY: tiktokCoordinates.picker.firstY,
+                    rowStep: tiktokCoordinates.picker.rowStep,
+                },
+                scrollToNewestVideo: true,
+            });
+        }
         reachedCaptionScreen = true;
     } catch (error) {
         lastAttemptError = error;
@@ -846,15 +921,27 @@ if (!reachedCaptionScreen || !driver) {
 }
 
 try {
-    await addCaption(driver, deviceRemote, manifest.device.udid, tiktokCoordinates, manifest.caption);
-    if (manifest.destination === 'publish') {
-        await tapCoordinate(driver, tiktokCoordinates.finish.x, tiktokCoordinates.finish.y, 'Post');
-        console.log('TikTok post submitted');
-        // The upload to TikTok continues in the background after this tap —
-        // tearing down the session too soon can interrupt it.
-        await driver.pause(60_000);
+    if (slideshow) {
+        await addCaption(driver, deviceRemote, manifest.device.udid, tiktokCoordinates, manifest.caption);
+        if (manifest.destination === 'publish') {
+            await tapCoordinate(driver, tiktokCoordinates.finish.x, tiktokCoordinates.finish.y, 'Post');
+            console.log('TikTok post submitted');
+            // The upload to TikTok continues in the background after this tap —
+            // tearing down the session too soon can interrupt it.
+            await driver.pause(60_000);
+        } else {
+            await saveDraft(driver, deviceRemote, manifest.device.udid, tiktokCoordinates);
+        }
     } else {
-        await saveDraft(driver, deviceRemote, manifest.device.udid, tiktokCoordinates);
+        await finishVideoVisionPost({
+            driver,
+            remote: deviceRemote,
+            udid: manifest.device.udid,
+            manifest,
+            typeKeys,
+            debugShot,
+            finishPoint: manifest.destination === 'publish' ? tiktokCoordinates.finish : tiktokCoordinates.draft,
+        });
     }
     await backgroundTikTok(driver).catch(() => {});
 } finally {
