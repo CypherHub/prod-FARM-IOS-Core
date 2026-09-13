@@ -107,69 +107,79 @@ async function evaluateCondition(
     const baseUrl = (process.env.OPENROUTER_BASE_URL?.trim() || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
     const jpeg = await screenshotToJpeg(screenshot);
 
-    const payload = {
-        model,
-        thinking: { type: 'disabled' },
-        response_format: { type: 'json_object' },
-        messages: [
-            {
-                role: 'system',
-                content: 'You answer YES or NO to a question based on the current screenshot of an iPhone. Respond with ONLY a valid JSON object — no markdown, no backticks, no extra text: {"answer": "yes"|"no", "reason": "short explanation"}. NEVER include trailing commas, and always double-quote all keys and string values.',
-            },
-            {
-                role: 'user',
-                content: [
-                    { type: 'text', text: `Answer YES or NO: ${question}` },
-                    { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${jpeg.toString('base64')}`, detail: 'high' } },
-                ],
-            },
-        ],
-    };
+    const MAX_ATTEMPTS = 3;
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-            authorization: `Bearer ${apiKey}`,
-            'content-type': 'application/json',
-            'HTTP-Referer': 'https://github.com/CypherHub/prod-FARM-IOS-Core',
-            'X-Title': 'phone-farm-core',
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(60_000),
-    });
-
-    if (!response.ok) throw new Error(`AI vision API returned ${response.status}`);
-
-    const body = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const content = body.choices?.[0]?.message?.content;
-    if (!content) throw new Error('AI vision returned empty response');
-
-    // Extract JSON from response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    const json = jsonMatch?.[0] ?? content;
-
-    let parsed: { answer?: string; reason?: string };
-    try {
-        parsed = JSON.parse(json) as { answer?: string; reason?: string };
-    } catch {
-        // Attempt to fix common JSON issues: trailing commas, single quotes, unquoted keys
-        const cleaned = json
-            .replace(/,(\s*[}\]])/g, '$1')     // remove trailing commas before } or ]
-            .replace(/'/g, '"')                 // single quotes → double quotes
-            .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // unquoted keys → quoted keys
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         try {
-            parsed = JSON.parse(cleaned) as { answer?: string; reason?: string };
-        } catch {
-            throw new Error(`AI returned invalid JSON: ${content.slice(0, 200)}`);
+            const payload = {
+                model,
+                thinking: { type: 'disabled' },
+                response_format: { type: 'json_object' },
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You answer YES or NO to a question based on the current screenshot of an iPhone. Respond with ONLY a valid JSON object — no markdown, no backticks, no extra text: {"answer": "yes"|"no", "reason": "short explanation"}. NEVER include trailing commas, and always double-quote all keys and string values.',
+                    },
+                    {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: `Answer YES or NO: ${question}` },
+                            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${jpeg.toString('base64')}`, detail: 'high' } },
+                        ],
+                    },
+                ],
+            };
+
+            const response = await fetch(`${baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    authorization: `Bearer ${apiKey}`,
+                    'content-type': 'application/json',
+                    'HTTP-Referer': 'https://github.com/CypherHub/prod-FARM-IOS-Core',
+                    'X-Title': 'phone-farm-core',
+                },
+                body: JSON.stringify(payload),
+                signal: AbortSignal.timeout(60_000),
+            });
+
+            if (!response.ok) throw new Error(`AI vision API returned ${response.status}`);
+
+            const body = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+            const content = body.choices?.[0]?.message?.content;
+            if (!content) throw new Error('AI vision returned empty response');
+
+            // Extract JSON from response
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            const json = jsonMatch?.[0] ?? content;
+
+            let parsed: { answer?: string; reason?: string };
+            try {
+                parsed = JSON.parse(json) as { answer?: string; reason?: string };
+            } catch {
+                // Attempt to fix common JSON issues: trailing commas, single quotes, unquoted keys
+                const cleaned = json
+                    .replace(/,(\s*[}\]])/g, '$1')     // remove trailing commas before } or ]
+                    .replace(/'/g, '"')                 // single quotes → double quotes
+                    .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // unquoted keys → quoted keys
+                parsed = JSON.parse(cleaned) as { answer?: string; reason?: string };
+            }
+
+            const answer = String(parsed.answer ?? '').trim().toLowerCase();
+            if (answer !== 'yes' && answer !== 'no') {
+                throw new Error(`AI returned unexpected answer: ${answer} (expected yes or no)`);
+            }
+
+            return { answer: answer === 'yes', reason: parsed.reason ?? 'No reason given' };
+        } catch (error) {
+            if (attempt < MAX_ATTEMPTS) {
+                await new Promise((r) => setTimeout(r, 1000));
+            } else {
+                throw error;
+            }
         }
     }
-    const answer = String(parsed.answer ?? '').trim().toLowerCase();
 
-    if (answer !== 'yes' && answer !== 'no') {
-        throw new Error(`AI returned unexpected answer: ${answer} (expected yes or no)`);
-    }
-
-    return { answer: answer === 'yes', reason: parsed.reason ?? 'No reason given' };
+    throw new Error('AI condition evaluation failed after all attempts');
 }
 
 async function runSteps(
