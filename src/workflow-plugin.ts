@@ -765,6 +765,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                         .where(eq(workflows.id, workflowId));
                 }
 
+                /* ── TEMPORARILY DISABLED: account switcher on queue ──
                 // Switch TikTok account if the generation specifies one
                 if (gen.account) {
                     const devices = await context.loadDevices();
@@ -794,6 +795,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                         await switchDriver.deleteSession().catch(() => {});
                     }
                 }
+                ─────────────────────────────────────────────────*/
 
                 // Get all steps
                 const steps = await db.select().from(workflowSteps)
