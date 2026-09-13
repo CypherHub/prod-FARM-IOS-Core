@@ -156,7 +156,7 @@ export const workflowStatus = schedulerSchema.enum('workflow_status', [
 ]);
 
 export const workflowStepType = schedulerSchema.enum('workflow_step_type', [
-    'tap', 'swipe', 'wait', 'if_condition', 'app_action', 'home', 'unlock', 'open_url', 'screenshot',
+    'tap', 'swipe', 'wait', 'if_condition', 'app_action', 'home', 'unlock', 'open_url', 'screenshot', 'type_keys',
 ]);
 
 export const workflows = schedulerSchema.table('workflows', {
@@ -187,6 +187,8 @@ export const workflowSteps = schedulerSchema.table('workflow_steps', {
     appBundleId: text('app_bundle_id'),
     appActionType: text('app_action_type'),
     url: text('url'),
+    /** Text to type on a type_keys step (e.g. caption text). */
+    text: text('text'),
     /** When set on an if_condition step: if AI answers YES, skip this many steps forward. If NO, continue normally (don't stop). */
     skipSteps: integer('skip_steps'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),

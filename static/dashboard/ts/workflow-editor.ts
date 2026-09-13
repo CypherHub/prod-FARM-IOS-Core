@@ -16,6 +16,7 @@ interface WorkflowStep {
     appBundleId: string | null;
     appActionType: string | null;
     url: string | null;
+    text: string | null;
 }
 
 interface WorkflowData {
@@ -104,6 +105,7 @@ function stepIcon(type: string): string {
         case 'open_url': return '&#128279;';
         case 'app_action': return '&#9881;';
         case 'screenshot': return '&#128247;';
+        case 'type_keys': return '&#128221;';
         default: return '&#8212;';
     }
 }
@@ -120,6 +122,7 @@ function stepSummary(step: WorkflowStep): string {
         case 'open_url': return `URL: ${escapeHtml(step.url?.slice(0, 40))}${label}`;
         case 'app_action': return `${step.appActionType ?? 'activate'} ${escapeHtml(step.appBundleId)}${label}`;
         case 'screenshot': return `Screenshot${label}`;
+        case 'type_keys': return `Type keys: ${escapeHtml(step.text?.slice(0, 40))}${label}`;
         default: return step.stepType;
     }
 }
@@ -212,6 +215,10 @@ function renderStepParams(step: WorkflowStep): string {
             return `
                 <div class="field"><label>Bundle ID<input id="dt-appBundleId" type="text" value="${escapeHtml(step.appBundleId ?? '')}"></label></div>
                 <div class="field"><label>Action<select id="dt-appActionType"><option value="activate" ${step.appActionType === 'activate' ? 'selected' : ''}>Activate</option><option value="terminate" ${step.appActionType === 'terminate' ? 'selected' : ''}>Terminate</option></select></label></div>`;
+        case 'type_keys':
+            return `
+                <div class="field" style="grid-column:1/-1"><label>Text to type<textarea id="dt-text" placeholder="Caption text to type into the focused field" style="min-height:60px;width:100%">${escapeHtml(step.text ?? '')}</textarea></label></div>
+                <p class="hint">Types the given text using Appium&#39;s /keys endpoint. The target field must already be focused.</p>`;
         case 'home':
         case 'unlock':
         case 'screenshot':
@@ -266,6 +273,10 @@ function renderStepTypeFields(stepType: string): string {
             return `
                 <div class="field"><label>Bundle ID<input id="as-appBundleId" type="text" placeholder="com.zhiliaoapp.musically"></label></div>
                 <div class="field"><label>Action<select id="as-appActionType"><option value="activate">Activate</option><option value="terminate">Terminate</option></select></label></div>`;
+        case 'type_keys':
+            return `
+                <div class="field" style="grid-column:1/-1"><label>Text to type<textarea id="as-text" placeholder="Caption text to type into the focused field" style="min-height:60px"></textarea></label></div>
+                <p class="hint">Types the given text using Appium&#39;s /keys endpoint on the currently focused element.</p>`;
         case 'home':
         case 'unlock':
         case 'screenshot':
@@ -291,6 +302,7 @@ async function addStep(stepType: string): Promise<void> {
     const url = (document.querySelector<HTMLInputElement>('#as-url'))?.value;
     const appBundleId = (document.querySelector<HTMLInputElement>('#as-appBundleId'))?.value;
     const appActionType = (document.querySelector<HTMLSelectElement>('#as-appActionType'))?.value;
+    const text = (document.querySelector<HTMLTextAreaElement>('#as-text'))?.value;
 
     if (x) body.x = Number(x);
     if (y) body.y = Number(y);
@@ -302,6 +314,7 @@ async function addStep(stepType: string): Promise<void> {
     if (url) body.url = url;
     if (appBundleId) body.appBundleId = appBundleId;
     if (appActionType) body.appActionType = appActionType;
+    if (text) body.text = text;
 
     await request(`${API}/${workflowId}/steps`, {
         method: 'POST',
@@ -328,6 +341,7 @@ async function updateSelectedStep(): Promise<void> {
     const url = (document.querySelector<HTMLInputElement>('#dt-url'))?.value;
     const appBundleId = (document.querySelector<HTMLInputElement>('#dt-appBundleId'))?.value;
     const appActionType = (document.querySelector<HTMLSelectElement>('#dt-appActionType'))?.value;
+    const text = (document.querySelector<HTMLTextAreaElement>('#dt-text'))?.value;
 
     if (x !== null && x !== undefined && x !== '') body.x = Number(x);
     if (y !== null && y !== undefined && y !== '') body.y = Number(y);
@@ -339,6 +353,7 @@ async function updateSelectedStep(): Promise<void> {
     if (url !== null && url !== undefined && url !== '') body.url = url;
     if (appBundleId !== null && appBundleId !== undefined && appBundleId !== '') body.appBundleId = appBundleId;
     if (appActionType !== null && appActionType !== undefined && appActionType !== '') body.appActionType = appActionType;
+    if (text !== null && text !== undefined && text !== '') body.text = text;
 
     await request(`/api/workflow-steps/${selectedStepId}`, {
         method: 'PATCH',

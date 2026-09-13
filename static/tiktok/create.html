@@ -131,6 +131,7 @@
         const state = {
             bookmark: null, galleries: [], devices: [], clips: [], targetSeconds: null,
             hooks: [], hookRunId: null, busy: false, generationIds: [],
+            workflowId: null,
         };
 
         el.back.href = `/library/bookmarks/${encodeURIComponent(bookmarkId)}`;
@@ -244,6 +245,18 @@
             el.clipField.hidden = kind !== 'video';
             await refreshClips();
             renderHooks();
+
+            // Load the "Create Draft with Video, Caption and Song" workflow ID
+            // Prefer the clone if it exists, otherwise fall back to the original
+            try {
+                const { workflows } = await jsonRequest('/api/workflows');
+                const clone = (workflows ?? []).find((w) => w.name === 'Create Draft (clone)');
+                if (clone) state.workflowId = clone.id;
+                else {
+                    const original = (workflows ?? []).find((w) => w.name === 'Create Draft with Video, Caption and Song');
+                    if (original) state.workflowId = original.id;
+                }
+            } catch { /* workflows may not exist yet */ }
         }
 
         el.gallery.addEventListener('change', () => void refreshClips());
@@ -395,7 +408,18 @@
                 showError(errorNode, null);
                 try {
                     await jsonRequest(`/api/generations/${generation.id}`, { method: 'PATCH', body: JSON.stringify({ caption: caption() }) });
-                    await jsonRequest(`/api/generations/${generation.id}/queue`, { method: 'POST', body: JSON.stringify({}) });
+                    if (state.workflowId) {
+                        // Use the workflow-based approach: import media to device + run workflow
+                        await jsonRequest(`/api/generations/${generation.id}/queue-via-workflow`, {
+                            method: 'POST', body: JSON.stringify({
+                                workflowId: state.workflowId,
+                                caption: caption(),
+                            }),
+                        });
+                    } else {
+                        // Fallback: old post task system
+                        await jsonRequest(`/api/generations/${generation.id}/queue`, { method: 'POST', body: JSON.stringify({}) });
+                    }
                     void watch(generation.id);
                 } catch (error) { showError(errorNode, error); }
             });

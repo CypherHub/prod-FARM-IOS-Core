@@ -137,6 +137,8 @@ const steps: StepDef[] = [
     },
     { stepType: 'tap', label: 'Tap caption field to focus', x: CAPTION_X, y: CAPTION_Y },
     { stepType: 'wait', label: 'Settle after caption focus', waitMs: 1000 },
+    { stepType: 'type_keys', label: 'Type caption text' },
+    { stepType: 'wait', label: 'Wait after typing', waitMs: 800 },
     { stepType: 'tap', label: 'Tap Post (save to drafts)', x: FINISH_X, y: FINISH_Y },
     { stepType: 'wait', label: 'Wait for save', waitMs: 3000 },
 ];

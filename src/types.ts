@@ -62,7 +62,7 @@ export interface TaskRetryPolicy {
 }
 
 export type WorkflowStatus = 'draft' | 'active' | 'completed' | 'archived';
-export type WorkflowStepType = 'tap' | 'swipe' | 'wait' | 'if_condition' | 'app_action' | 'home' | 'unlock' | 'open_url' | 'screenshot';
+export type WorkflowStepType = 'tap' | 'swipe' | 'wait' | 'if_condition' | 'app_action' | 'home' | 'unlock' | 'open_url' | 'screenshot' | 'type_keys';
 
 export interface Workflow {
     id: string;
@@ -91,5 +91,6 @@ export interface WorkflowStep {
     appBundleId?: string;
     appActionType?: string;
     url?: string;
+    text?: string;
     skipSteps?: number;
 }

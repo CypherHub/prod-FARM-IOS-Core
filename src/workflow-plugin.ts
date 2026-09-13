@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, and } from 'drizzle-orm';
 import { remote, type Browser } from 'webdriverio';
 
-import { workflows, workflowSteps } from './database/schema.js';
+import { workflows, workflowSteps, generations } from './database/schema.js';
 import { screenshotToJpeg } from './tiktok/vision-guide.js';
 import { tiktokAppiumCapabilities } from './tiktok/appium-session.js';
 import type { PhoneFarmPlugin, PluginRouteContext } from './plugin.js';
@@ -259,6 +259,40 @@ async function runSteps(
                     }
                     break;
                 }
+                case 'type_keys': {
+                    if (!step.text) throw new Error('type_keys step missing text');
+                    // Attach a lightweight Appium session to TikTok to type into its focused field
+                    const bundleId = process.env.TIKTOK_BUNDLE_ID ?? 'com.zhiliaoapp.musically';
+                    const keyDriver = await appiumSession(deviceUdid, bundleId);
+                    try {
+                        const appiumHost = process.env.APPIUM_HOST ?? '127.0.0.1';
+                        const appiumPort = Number(process.env.APPIUM_PORT ?? 4725);
+                        const sessionUrl = `http://${appiumHost}:${appiumPort}/session/${keyDriver.sessionId}`;
+
+                        // Clear any existing text in the field first (Cmd+A, then Delete/backspace).
+                        // WebDriver special keys: \uE009 = Command, \uE017 = Delete.
+                        const clear = '\uE009a\uE017';
+                        await fetch(`${sessionUrl}/keys`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({ value: [clear] }),
+                        });
+                        // Small delay for the clear to take effect
+                        await new Promise((r) => setTimeout(r, 300));
+
+                        // Now type the new text
+                        const response = await fetch(`${sessionUrl}/keys`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({ value: [step.text] }),
+                        });
+                        if (!response.ok) throw new Error(`Appium type_keys failed: ${await response.text()}`);
+                    } finally {
+                        await keyDriver.deleteSession().catch(() => {});
+                    }
+                    updateReplayLog(runId, step.stepOrder, `Typed text: "${step.text.slice(0, 50)}..."${step.label ? ` — ${step.label}` : ''}`, 'info');
+                    break;
+                }
                 default: {
                     updateReplayLog(runId, step.stepOrder, `Unknown step type: ${step.stepType}`, 'error');
                 }
@@ -352,6 +386,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     appBundleId?: string;
                     appActionType?: string;
                     url?: string;
+                    text?: string;
                     skipSteps?: number;
                 };
             }>('/api/workflows/:id/steps', async (request, reply) => {
@@ -380,6 +415,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     appBundleId: request.body.appBundleId?.trim() ?? null,
                     appActionType: request.body.appActionType?.trim() ?? null,
                     url: request.body.url?.trim() ?? null,
+                    text: request.body.text?.trim() ?? null,
                     skipSteps: request.body.skipSteps ?? null,
                 }).returning();
                 return reply.code(201).send(row);
@@ -400,6 +436,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     appActionType?: string;
                     url?: string;
                     stepOrder?: number;
+                    text?: string;
                     skipSteps?: number;
                 };
             }>('/api/workflow-steps/:stepId', async (request, reply) => {
@@ -417,6 +454,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 if (request.body.appActionType !== undefined) updates.appActionType = request.body.appActionType?.trim() ?? null;
                 if (request.body.url !== undefined) updates.url = request.body.url?.trim() ?? null;
                 if (request.body.stepOrder !== undefined) updates.stepOrder = request.body.stepOrder;
+                if (request.body.text !== undefined) updates.text = request.body.text?.trim() ?? null;
                 if (request.body.skipSteps !== undefined) updates.skipSteps = request.body.skipSteps;
 
                 const [row] = await db.update(workflowSteps).set(updates)
@@ -536,6 +574,115 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     }
                 }
                 return { ok: true };
+            });
+
+            // Queue generation via workflow: import media to device, patch caption, run workflow
+            app.post<{
+                Params: { generationId: string };
+                Body: { workflowId: string; caption?: string };
+            }>('/api/generations/:generationId/queue-via-workflow', async (request, reply) => {
+                const { generationId } = request.params;
+                const { workflowId, caption } = request.body;
+                if (!workflowId) return reply.code(400).send({ error: 'workflowId is required' });
+
+                // Fetch generation
+                const [gen] = await db.select().from(generations).where(eq(generations.id, generationId));
+                if (!gen) return reply.code(404).send({ error: 'Generation not found' });
+                if (!gen.outputDir) return reply.code(409).send({ error: 'Generation has no output files' });
+
+                // Fetch workflow
+                const [wf] = await db.select().from(workflows).where(eq(workflows.id, workflowId));
+                if (!wf) return reply.code(404).send({ error: 'Workflow not found' });
+
+                // Determine device UDID
+                const udid = gen.deviceUdid ?? wf.deviceUdid;
+                if (!udid) return reply.code(400).send({ error: 'No device assigned to this generation or workflow' });
+
+                // Find the video file
+                const { readdir, readFile } = await import('node:fs/promises');
+                const pathModule = await import('node:path');
+                const VIDEO_OUTPUT = 'post.mp4';
+                const produced = await readdir(gen.outputDir);
+                const videoFile = produced.find((name) => name === VIDEO_OUTPUT);
+                if (!videoFile) return reply.code(409).send({ error: 'Generation produced no video file' });
+                const videoPath = pathModule.join(gen.outputDir, videoFile);
+
+                // Import video to device via WDA
+                const wdaUrl = process.env.WDA_URL ?? 'http://127.0.0.1:8100';
+                const data = await readFile(videoPath);
+                if (data.length > 350 * 1024 * 1024) {
+                    return reply.code(413).send({ error: 'Video is too large for import (max 350MB)' });
+                }
+                const importResponse = await fetch(`${wdaUrl}/wda/import-media`, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                        name: `gen-${generationId.slice(0, 8)}.mp4`,
+                        mimeType: 'video/mp4',
+                        data: data.toString('base64'),
+                    }),
+                });
+                const importResult = await importResponse.json() as { value?: { error?: unknown } };
+                if (!importResponse.ok || (importResult.value && typeof importResult.value === 'object' && 'error' in importResult.value)) {
+                    return reply.code(502).send({ error: `WDA media import failed: ${JSON.stringify(importResult)}` });
+                }
+                console.log(`Imported generation ${generationId} video to device ${udid}`);
+
+                // If caption provided, patch all type_keys steps in the workflow
+                if (caption?.trim()) {
+                    const typeKeySteps = await db.select({ id: workflowSteps.id })
+                        .from(workflowSteps)
+                        .where(
+                            and(
+                                eq(workflowSteps.workflowId, workflowId),
+                                eq(workflowSteps.stepType, 'type_keys'),
+                            )
+                        );
+                    for (const step of typeKeySteps) {
+                        await db.update(workflowSteps).set({ text: caption.trim() })
+                            .where(eq(workflowSteps.id, step.id));
+                    }
+                }
+
+                // Ensure workflow has the device UDID
+                if (!wf.deviceUdid || wf.deviceUdid !== udid) {
+                    await db.update(workflows).set({ deviceUdid: udid, updatedAt: new Date() })
+                        .where(eq(workflows.id, workflowId));
+                }
+
+                // Get all steps
+                const steps = await db.select().from(workflowSteps)
+                    .where(eq(workflowSteps.workflowId, workflowId))
+                    .orderBy(asc(workflowSteps.stepOrder));
+                if (steps.length === 0) return reply.code(409).send({ error: 'Workflow has no steps' });
+
+                // Update generation status
+                await db.update(generations).set({ status: 'queued', deviceUdid: udid })
+                    .where(eq(generations.id, generationId));
+
+                // Start replay, then reset the type_keys text so captions don't accumulate
+                const runId = startReplayEntry(workflowId, wf.name, udid, steps.length);
+                const abortController = new AbortController();
+                runSteps(context.remote, udid, steps, abortController.signal, runId)
+                    .catch(() => {
+                        finishReplay(runId, 'failed', 'Unexpected error during replay');
+                    })
+                    .finally(() => {
+                        // Reset type_keys text so each queue starts fresh
+                        db.update(workflowSteps).set({ text: null })
+                            .where(and(
+                                eq(workflowSteps.workflowId, workflowId),
+                                eq(workflowSteps.stepType, 'type_keys'),
+                            )).catch(() => {});
+                    });
+
+                return reply.code(202).send({
+                    ok: true,
+                    message: `Imported video to device and started workflow replay`,
+                    runId,
+                    status: 'running',
+                    totalSteps: steps.length,
+                });
             });
         },
     };
