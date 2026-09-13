@@ -71,6 +71,13 @@
       "when": 1789256972306,
       "tag": "0009_same_victor_mancha",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789263632243,
+      "tag": "0010_nervous_vance_astro",
+      "breakpoints": true
     }
   ]
 }

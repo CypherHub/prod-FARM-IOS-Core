@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Workflow Runs · Handler</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <a class="brand-name" href="/">iOS Farm</a>
+                <a class="brand-by" href="https://gethandler.ai" target="_blank" rel="noopener">by Handler</a>
+            </div>
+            <nav class="topbar-nav"><a class="button secondary" href="/">Devices</a>__PLUGIN_NAV____AUTH_NAV__</nav>
+        </div>
+    </header>
+    <main class="shell">
+        <header class="page-header">
+            <div><span class="eyebrow">Workflow automation</span><h1>Workflow Runs</h1><p>History of all workflow replays across every device.</p></div>
+            <div class="inline-actions"><button id="refresh-runs" class="button secondary" type="button">Refresh</button></div>
+        </header>
+
+        <div class="filter-bar">
+            <label>Workflow <select id="filter-workflow">
+                <option value="">All workflows</option>
+            </select></label>
+            <label>Status <select id="filter-status">
+                <option value="">All statuses</option>
+                <option value="running">Running</option>
+                <option value="succeeded">Succeeded</option>
+                <option value="failed">Failed</option>
+                <option value="stopped">Stopped</option>
+            </select></label>
+        </div>
+
+        <section class="panel">
+            <div class="section-heading"><div><span class="eyebrow">History</span><h2>Runs</h2></div></div>
+            <div id="run-list" class="task-list loading-card"><span class="spinner"></span>Loading runs…</div>
+            <div id="pagination" class="pagination" style="display:none"></div>
+        </section>
+    </main>
+
+    <!-- Detail modal -->
+    <div id="run-detail-modal">
+        <div class="modal" method="dialog">
+            <div class="modal-head">
+                <div><span class="eyebrow">Workflow Run</span><h2 id="detail-title">Loading…</h2></div>
+                <div class="inline-actions"><button class="button secondary" type="button" id="detail-close">Close</button></div>
+            </div>
+            <div id="detail-body" class="modal-body"><span class="spinner"></span></div>
+        </div>
+    </div>
+
+    <footer class="app-footer">__FOOTER__</footer>
+    <script type="module" src="/assets/workflow-runs.js"></script>
+</body>
+</html>

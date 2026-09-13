@@ -171,6 +171,25 @@ export const workflows = schedulerSchema.table('workflows', {
     index('workflows_device_idx').on(table.deviceUdid, table.createdAt),
 ]);
 
+export const workflowStatusEnum = workflowStatus;
+export const workflowStepTypeEnum = workflowStepType;
+
+export const workflowRuns = schedulerSchema.table('workflow_runs', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowId: uuid('workflow_id').notNull().references(() => workflows.id, { onDelete: 'cascade' }),
+    deviceUdid: text('device_udid'),
+    status: text('status').notNull().default('running'),
+    totalSteps: integer('total_steps').notNull().default(0),
+    logs: jsonb('logs').$type<Array<{ step: number; message: string; type: string }>>().notNull().default([]),
+    error: text('error'),
+    startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+    index('workflow_runs_workflow_idx').on(table.workflowId, table.createdAt),
+    index('workflow_runs_status_idx').on(table.status, table.createdAt),
+]);
+
 export const workflowSteps = schedulerSchema.table('workflow_steps', {
     id: uuid('id').primaryKey().defaultRandom(),
     workflowId: uuid('workflow_id').notNull().references(() => workflows.id, { onDelete: 'cascade' }),

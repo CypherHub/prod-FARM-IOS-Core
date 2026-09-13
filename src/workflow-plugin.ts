@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
-import { eq, asc, and } from 'drizzle-orm';
+import { eq, asc, and, desc, count } from 'drizzle-orm';
 import { remote, type Browser } from 'webdriverio';
 
-import { workflows, workflowSteps, generations } from './database/schema.js';
+import { workflows, workflowSteps, generations, workflowRuns } from './database/schema.js';
 import { screenshotToJpeg } from './tiktok/vision-guide.js';
 import { tiktokAppiumCapabilities } from './tiktok/appium-session.js';
 import type { PhoneFarmPlugin, PluginRouteContext } from './plugin.js';
@@ -41,7 +41,7 @@ interface ActiveReplay {
 
 const activeReplays = new Map<string, ActiveReplay>();
 
-function startReplayEntry(workflowId: string, workflowName: string, deviceUdid: string, totalSteps: number): string {
+function startReplayEntry(workflowId: string, workflowName: string, deviceUdid: string, totalSteps: number, db?: any): string {
     const runId = crypto.randomUUID();
     activeReplays.set(runId, {
         workflowId,
@@ -53,6 +53,20 @@ function startReplayEntry(workflowId: string, workflowName: string, deviceUdid: 
         totalSteps,
         logs: [],
     });
+
+    // Persist immediately so the run appears in the historical log page
+    if (db) {
+        db.insert(workflowRuns).values({
+            id: runId,
+            workflowId,
+            deviceUdid,
+            status: 'running',
+            totalSteps,
+            logs: [],
+            startedAt: new Date(),
+        }).catch(() => {});
+    }
+
     return runId;
 }
 
@@ -64,11 +78,21 @@ function updateReplayLog(runId: string, step: number, message: string, type: 'in
     }
 }
 
-function finishReplay(runId: string, status: 'succeeded' | 'failed' | 'stopped', error?: string): void {
+function finishReplay(runId: string, status: 'succeeded' | 'failed' | 'stopped', error?: string, db?: any): void {
     const replay = activeReplays.get(runId);
     if (replay) {
         replay.status = status;
         replay.error = error;
+    }
+
+    // Persist final status to DB
+    if (db && runId) {
+        db.update(workflowRuns).set({
+            status,
+            logs: replay?.logs ?? [],
+            error: error ?? null,
+            finishedAt: new Date(),
+        }).where(eq(workflowRuns.id, runId)).catch(() => {});
     }
 }
 
@@ -139,6 +163,7 @@ async function runSteps(
     steps: any[],
     signal: AbortSignal,
     runId: string,
+    db?: any,
 ): Promise<void> {
     for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
@@ -253,35 +278,24 @@ async function runSteps(
                         // Gate mode: YES = continue; NO = stop replay (legacy behavior)
                         if (!answer) {
                             updateReplayLog(runId, step.stepOrder, `Condition not met, stopping replay`, 'info');
-                            finishReplay(runId, 'stopped', `AI condition "${step.aiQuestion}" evaluated as NO: ${reason}`);
+                            finishReplay(runId, 'stopped', `AI condition "${step.aiQuestion}" evaluated as NO: ${reason}`, db);
                             return;
                         }
                     }
                     break;
                 }
                 case 'type_keys': {
-                    if (!step.text) throw new Error('type_keys step missing text');
+                    if (!step.text) {
+                        updateReplayLog(runId, step.stepOrder, `Skipping type_keys (no text)${step.label ? ` — ${step.label}` : ''}`, 'info');
+                        break;
+                    }
                     // Attach a lightweight Appium session to TikTok to type into its focused field
                     const bundleId = process.env.TIKTOK_BUNDLE_ID ?? 'com.zhiliaoapp.musically';
                     const keyDriver = await appiumSession(deviceUdid, bundleId);
                     try {
                         const appiumHost = process.env.APPIUM_HOST ?? '127.0.0.1';
                         const appiumPort = Number(process.env.APPIUM_PORT ?? 4725);
-                        const sessionUrl = `http://${appiumHost}:${appiumPort}/session/${keyDriver.sessionId}`;
-
-                        // Clear any existing text in the field first (Cmd+A, then Delete/backspace).
-                        // WebDriver special keys: \uE009 = Command, \uE017 = Delete.
-                        const clear = '\uE009a\uE017';
-                        await fetch(`${sessionUrl}/keys`, {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify({ value: [clear] }),
-                        });
-                        // Small delay for the clear to take effect
-                        await new Promise((r) => setTimeout(r, 300));
-
-                        // Now type the new text
-                        const response = await fetch(`${sessionUrl}/keys`, {
+                        const response = await fetch(`http://${appiumHost}:${appiumPort}/session/${keyDriver.sessionId}/keys`, {
                             method: 'POST',
                             headers: { 'content-type': 'application/json' },
                             body: JSON.stringify({ value: [step.text] }),
@@ -290,7 +304,7 @@ async function runSteps(
                     } finally {
                         await keyDriver.deleteSession().catch(() => {});
                     }
-                    updateReplayLog(runId, step.stepOrder, `Typed text: "${step.text.slice(0, 50)}..."${step.label ? ` — ${step.label}` : ''}`, 'info');
+                    updateReplayLog(runId, step.stepOrder, `Typed caption`, 'info');
                     break;
                 }
                 default: {
@@ -300,12 +314,12 @@ async function runSteps(
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             updateReplayLog(runId, step.stepOrder, `Error: ${message}`, 'error');
-            finishReplay(runId, 'failed', message);
+            finishReplay(runId, 'failed', message, db);
             return;
         }
     }
 
-    finishReplay(runId, 'succeeded');
+    finishReplay(runId, 'succeeded', undefined, db);
 }
 
 export function createWorkflowPlugin(): PhoneFarmPlugin {
@@ -316,6 +330,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
         tasks: [],
         navLinks: [
             { label: 'Workflows', href: '/workflows', order: 2 },
+            { label: 'Workflow Runs', href: '/workflow-runs', order: 3 },
         ],
         registerRoutes(context: PluginRouteContext) {
             const { app } = context;
@@ -514,12 +529,12 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     .orderBy(asc(workflowSteps.stepOrder)) as unknown as WorkflowStep[];
                 if (steps.length === 0) return reply.code(400).send({ error: 'Workflow has no steps' });
 
-                const runId = startReplayEntry(id, wf.name, wf.deviceUdid, steps.length);
+                const runId = startReplayEntry(id, wf.name, wf.deviceUdid, steps.length, db);
 
                 // Run replay in background (no await)
                 const abortController = new AbortController();
-                runSteps(context.remote, wf.deviceUdid, steps, abortController.signal, runId).catch(() => {
-                    finishReplay(runId, 'failed', 'Unexpected error during replay');
+                runSteps(context.remote, wf.deviceUdid, steps, abortController.signal, runId, db).catch(() => {
+                    finishReplay(runId, 'failed', 'Unexpected error during replay', db);
                 });
 
                 return reply.code(202).send({
@@ -536,7 +551,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 const replay = activeReplays.get(request.params.runId);
                 if (!replay) return reply.code(404).send({ error: 'Replay not found' });
                 if (replay.status !== 'running') return reply.code(409).send({ error: 'Replay is not running' });
-                finishReplay(request.params.runId, 'stopped', 'Stopped by user');
+                finishReplay(request.params.runId, 'stopped', 'Stopped by user', db);
                 return { ok: true };
             });
 
@@ -628,19 +643,23 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 }
                 console.log(`Imported generation ${generationId} video to device ${udid}`);
 
-                // If caption provided, patch all type_keys steps in the workflow
+                // If caption provided, patch the first type_keys step in the workflow
+                // (the rest type_keys steps are for other purposes like hashtag spacing)
                 if (caption?.trim()) {
-                    const typeKeySteps = await db.select({ id: workflowSteps.id })
+                    const typeKeySteps = await db.select({ id: workflowSteps.id, label: workflowSteps.label, stepOrder: workflowSteps.stepOrder })
                         .from(workflowSteps)
                         .where(
                             and(
                                 eq(workflowSteps.workflowId, workflowId),
                                 eq(workflowSteps.stepType, 'type_keys'),
                             )
-                        );
-                    for (const step of typeKeySteps) {
+                        )
+                        .orderBy(asc(workflowSteps.stepOrder));
+                    // Only patch the FIRST type_keys step (the main caption entry)
+                    // to avoid typing the caption into auxiliary type_keys steps
+                    if (typeKeySteps.length > 0) {
                         await db.update(workflowSteps).set({ text: caption.trim() })
-                            .where(eq(workflowSteps.id, step.id));
+                            .where(eq(workflowSteps.id, typeKeySteps[0]!.id));
                     }
                 }
 
@@ -661,11 +680,11 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     .where(eq(generations.id, generationId));
 
                 // Start replay, then reset the type_keys text so captions don't accumulate
-                const runId = startReplayEntry(workflowId, wf.name, udid, steps.length);
+                const runId = startReplayEntry(workflowId, wf.name, udid, steps.length, db);
                 const abortController = new AbortController();
-                runSteps(context.remote, udid, steps, abortController.signal, runId)
+                runSteps(context.remote, udid, steps, abortController.signal, runId, db)
                     .catch(() => {
-                        finishReplay(runId, 'failed', 'Unexpected error during replay');
+                        finishReplay(runId, 'failed', 'Unexpected error during replay', db);
                     })
                     .finally(() => {
                         // Reset type_keys text so each queue starts fresh
@@ -684,6 +703,64 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     totalSteps: steps.length,
                 });
             });
+
+            // --- Historical workflow runs ---
+
+            app.get('/api/workflow-runs', async (request) => {
+                const query = request.query as { limit?: string; offset?: string; workflowId?: string };
+                const limit = Math.min(Number(query.limit ?? 50), 200);
+                const offset = Number(query.offset ?? 0);
+
+                let rows;
+                let total: number;
+
+                if (query.workflowId) {
+                    rows = await db.select().from(workflowRuns)
+                        .where(eq(workflowRuns.workflowId, query.workflowId))
+                        .orderBy(desc(workflowRuns.startedAt)).limit(limit).offset(offset);
+                    const [tot] = await db.select({ count: count() }).from(workflowRuns)
+                        .where(eq(workflowRuns.workflowId, query.workflowId));
+                    total = Number(tot?.count ?? 0);
+                } else {
+                    rows = await db.select().from(workflowRuns)
+                        .orderBy(desc(workflowRuns.startedAt)).limit(limit).offset(offset);
+                    const [tot] = await db.select({ count: count() }).from(workflowRuns);
+                    total = Number(tot?.count ?? 0);
+                }
+
+                // Enrich with workflow names
+                const enriched = await Promise.all(rows.map(async (run) => {
+                    const [wf] = await db.select({ name: workflows.name })
+                        .from(workflows).where(eq(workflows.id, run.workflowId));
+                    return {
+                        ...run,
+                        startedAt: run.startedAt?.toISOString?.() ?? run.startedAt,
+                        finishedAt: run.finishedAt?.toISOString?.() ?? run.finishedAt,
+                        workflowName: wf?.name ?? 'Unknown',
+                    };
+                }));
+
+                return { runs: enriched, total };
+            });
+
+            // Get a single workflow run
+            app.get<{ Params: { runId: string } }>('/api/workflow-runs/:runId', async (request, reply) => {
+                const [run] = await db.select().from(workflowRuns)
+                    .where(eq(workflowRuns.id, request.params.runId));
+                if (!run) return reply.code(404).send({ error: 'Workflow run not found' });
+
+                const [wf] = await db.select({ name: workflows.name })
+                    .from(workflows).where(eq(workflows.id, run.workflowId));
+
+                return {
+                    ...run,
+                    startedAt: run.startedAt?.toISOString?.() ?? run.startedAt,
+                    finishedAt: run.finishedAt?.toISOString?.() ?? run.finishedAt,
+                    workflowName: wf?.name ?? 'Unknown',
+                };
+            });
+
+            // --- Page routes are registered in main app ---
         },
     };
 }
