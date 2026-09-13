@@ -57,29 +57,15 @@
             <div>
                 <span class="eyebrow"><a id="back" href="/library">← Template</a></span>
                 <h1>Create content</h1>
-                <p id="subtitle">Write hooks + captions, assign gallery videos, then build local drafts.</p>
+                <p id="subtitle">Select an account &amp; gallery, write hooks + captions, assign videos, then build local drafts.</p>
             </div>
         </header>
         <p id="page-error" class="status error" hidden></p>
 
         <div class="steps">
-            <!-- Step 1: Hooks + Captions -->
+            <!-- Step 1: Account + Gallery -->
             <section class="step" id="step-1">
-                <h2 class="step-title"><span class="step-badge">1</span>Write hooks + captions</h2>
-                <p class="field-help">The hook is the on-screen text. Each hook gets an auto-generated caption. A blank line between lines is kept as a pause.</p>
-                <div class="field wide">
-                    <label for="prompt">Extra instructions (optional)</label>
-                    <textarea id="prompt" rows="2" placeholder="e.g. lean funnier, mention the Kickstarter price"></textarea>
-                </div>
-                <div class="form-actions">
-                    <button class="button primary" id="suggest" type="button">Suggest 5 hooks with captions</button>
-                </div>
-                <div id="hook-status"></div>
-            </section>
-
-            <!-- Step 2: Account + Gallery -->
-            <section class="step" id="step-2">
-                <h2 class="step-title"><span class="step-badge">2</span>Select account &amp; gallery</h2>
+                <h2 class="step-title"><span class="step-badge">1</span>Select account &amp; gallery</h2>
                 <div class="split">
                     <div class="field">
                         <label for="target">Post to</label>
@@ -92,6 +78,20 @@
                         <p class="field-help" id="gallery-help">Choose a gallery with video clips.</p>
                     </div>
                 </div>
+            </section>
+
+            <!-- Step 2: Hooks + Captions -->
+            <section class="step" id="step-2">
+                <h2 class="step-title"><span class="step-badge">2</span>Write hooks + captions</h2>
+                <p class="field-help">The hook is the on-screen text. Each hook gets an auto-generated caption. A blank line between lines is kept as a pause.</p>
+                <div class="field wide">
+                    <label for="prompt">Extra instructions (optional)</label>
+                    <textarea id="prompt" rows="2" placeholder="e.g. lean funnier, mention the Kickstarter price"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button class="button primary" id="suggest" type="button">Suggest 5 hooks with captions</button>
+                </div>
+                <div id="hook-status"></div>
             </section>
 
             <!-- Step 3: Pick hooks + assign videos -->
@@ -285,6 +285,7 @@
                         && typeof item.durationSeconds === 'number');
                 } catch { state.galleryClips = []; }
             }
+            el.step1.dataset.done = String(!!el.gallery.value && state.galleryClips.length > 0);
             // Re-render hooks to update video selects
             renderHooks();
             el.galleryHelp.textContent = state.galleryClips.length === 0
@@ -354,7 +355,7 @@
                 const captionText = typeof item === 'string' ? '' : (item.caption ?? '');
                 addHook(hookText, captionText);
             }
-            el.step1.dataset.done = String((run.hooks ?? []).length > 0);
+            el.step2.dataset.done = String((run.hooks ?? []).length > 0);
             renderHooks();
             finishSuggest();
         }
