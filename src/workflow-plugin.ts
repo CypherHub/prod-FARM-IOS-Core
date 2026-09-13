@@ -165,161 +165,194 @@ async function runSteps(
     runId: string,
     db?: any,
 ): Promise<void> {
-    for (let i = 0; i < steps.length; i++) {
-        const step = steps[i];
-        if (signal.aborted) {
-            updateReplayLog(runId, step.stepOrder, 'Replay stopped by user', 'info');
-            return;
-        }
+    // Per-step timeout — no single operation should hang for longer than this
+    const STEP_TIMEOUT_MS = 20_000; // 20 seconds
+    // Global timeout — entire replay must finish within this window
+    const GLOBAL_TIMEOUT_MS = 300_000; // 5 minutes
 
-        try {
-            switch (step.stepType) {
-                case 'tap': {
-                    if (step.x === undefined || step.y === undefined) {
-                        throw new Error('Tap step missing coordinates');
-                    }
-                    await remote.performAction(deviceUdid, { type: 'tap', x: step.x, y: step.y });
-                    updateReplayLog(runId, step.stepOrder, `Tapped (${step.x}, ${step.y})${step.label ? ` — ${step.label}` : ''}`, 'info');
-                    break;
-                }
-                case 'swipe': {
-                    if (step.x === undefined || step.y === undefined || step.endX === undefined || step.endY === undefined || step.durationMs === undefined) {
-                        throw new Error('Swipe step missing coordinates or duration');
-                    }
-                    await remote.performAction(deviceUdid, {
-                        type: 'swipe',
-                        startX: step.x,
-                        startY: step.y,
-                        endX: step.endX,
-                        endY: step.endY,
-                        durationMs: step.durationMs,
-                    });
-                    updateReplayLog(runId, step.stepOrder, `Swiped from (${step.x}, ${step.y}) to (${step.endX}, ${step.endY}) over ${step.durationMs}ms${step.label ? ` — ${step.label}` : ''}`, 'info');
-                    break;
-                }
-                case 'wait': {
-                    const ms = step.waitMs ?? 1000;
-                    await new Promise<void>((resolve, reject) => {
-                        const timer = setTimeout(resolve, ms);
-                        signal.addEventListener('abort', () => { clearTimeout(timer); reject(new Error('Aborted')); }, { once: true });
-                    });
-                    updateReplayLog(runId, step.stepOrder, `Waited ${ms}ms${step.label ? ` — ${step.label}` : ''}`, 'info');
-                    break;
-                }
-                case 'home': {
-                    await remote.performAction(deviceUdid, { type: 'home' });
-                    updateReplayLog(runId, step.stepOrder, `Pressed Home${step.label ? ` — ${step.label}` : ''}`, 'info');
-                    break;
-                }
-                case 'unlock': {
-                    await remote.performAction(deviceUdid, { type: 'unlock' });
-                    updateReplayLog(runId, step.stepOrder, `Unlocked device${step.label ? ` — ${step.label}` : ''}`, 'info');
-                    break;
-                }
-                case 'open_url': {
-                    if (!step.url) throw new Error('open_url step missing url');
-                    await remote.performAction(deviceUdid, { type: 'home' });
-                    await new Promise((r) => setTimeout(r, 1000));
-                    // Use Appium mobile: deepLink to open the URL
-                    const linkDriver = await appiumSession(deviceUdid, 'com.apple.mobilesafari');
-                    try {
-                        await linkDriver.execute('mobile: deepLink', { url: step.url });
-                    } finally {
-                        await linkDriver.deleteSession().catch(() => {});
-                    }
-                    await new Promise((r) => setTimeout(r, 3000));
-                    updateReplayLog(runId, step.stepOrder, `Opened URL: ${step.url}${step.label ? ` — ${step.label}` : ''}`, 'info');
-                    break;
-                }
-                case 'app_action': {
-                    if (!step.appBundleId) throw new Error('app_action step missing appBundleId');
-                    await remote.performAction(deviceUdid, { type: 'home' });
-                    await new Promise((r) => setTimeout(r, 500));
-                    const appDriver = await appiumSession(deviceUdid, step.appBundleId);
-                    try {
-                        if (step.appActionType === 'terminate') {
-                            await appDriver.terminateApp(step.appBundleId);
-                        } else {
-                            await appDriver.activateApp(step.appBundleId);
-                        }
-                    } finally {
-                        await appDriver.deleteSession().catch(() => {});
-                    }
-                    await new Promise((r) => setTimeout(r, 2000));
-                    const actionLabel = step.appActionType === 'terminate' ? 'Terminated' : 'Launched';
-                    updateReplayLog(runId, step.stepOrder, `${actionLabel} app ${step.appBundleId}${step.label ? ` — ${step.label}` : ''}`, 'info');
-                    break;
-                }
-                case 'screenshot': {
-                    const buf = await remote.getScreenshot(deviceUdid);
-                    const { writeFile, mkdir } = await import('node:fs/promises');
-                    const pathModule = (await import('node:path')).default;
-                    const dataRoot = process.env.SCHEDULER_DATA_DIR ?? '.scheduler-data';
-                    const screenshotDir = pathModule.join(dataRoot, 'workflow-screenshots', runId);
-                    await mkdir(screenshotDir, { recursive: true });
-                    await writeFile(pathModule.join(screenshotDir, `step-${step.stepOrder}.png`), buf);
-                    updateReplayLog(runId, step.stepOrder, `Screenshot saved (step ${step.stepOrder})${step.label ? ` — ${step.label}` : ''}`, 'info');
-                    break;
-                }
-                case 'if_condition': {
-                    if (!step.aiQuestion) throw new Error('IF condition step missing aiQuestion');
-                    const buf = await remote.getScreenshot(deviceUdid);
-                    const { answer, reason } = await evaluateCondition(step.aiQuestion, buf);
-                    updateReplayLog(runId, step.stepOrder, `AI condition: "${step.aiQuestion}" → ${answer ? 'YES' : 'NO'} (${reason})${step.label ? ` — ${step.label}` : ''}`, 'condition');
-                    if (step.skipSteps) {
-                        // Skip mode: YES = skip forward skipSteps steps; NO = continue (don't stop)
-                        if (answer) {
-                            i += step.skipSteps;
-                            updateReplayLog(runId, step.stepOrder, `Condition met, skipping ${step.skipSteps} step(s)`, 'info');
-                        } else {
-                            updateReplayLog(runId, step.stepOrder, `Condition not met, continuing (skipping not triggered)`, 'info');
-                        }
-                    } else {
-                        // Gate mode: YES = continue; NO = stop replay (legacy behavior)
-                        if (!answer) {
-                            updateReplayLog(runId, step.stepOrder, `Condition not met, stopping replay`, 'info');
-                            finishReplay(runId, 'stopped', `AI condition "${step.aiQuestion}" evaluated as NO: ${reason}`, db);
-                            return;
-                        }
-                    }
-                    break;
-                }
-                case 'type_keys': {
-                    if (!step.text) {
-                        updateReplayLog(runId, step.stepOrder, `Skipping type_keys (no text)${step.label ? ` — ${step.label}` : ''}`, 'info');
-                        break;
-                    }
-                    // Attach a lightweight Appium session to TikTok to type into its focused field
-                    const bundleId = process.env.TIKTOK_BUNDLE_ID ?? 'com.zhiliaoapp.musically';
-                    const keyDriver = await appiumSession(deviceUdid, bundleId);
-                    try {
-                        const appiumHost = process.env.APPIUM_HOST ?? '127.0.0.1';
-                        const appiumPort = Number(process.env.APPIUM_PORT ?? 4725);
-                        const response = await fetch(`http://${appiumHost}:${appiumPort}/session/${keyDriver.sessionId}/keys`, {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify({ value: [step.text] }),
-                        });
-                        if (!response.ok) throw new Error(`Appium type_keys failed: ${await response.text()}`);
-                    } finally {
-                        await keyDriver.deleteSession().catch(() => {});
-                    }
-                    updateReplayLog(runId, step.stepOrder, `Typed caption`, 'info');
-                    break;
-                }
-                default: {
-                    updateReplayLog(runId, step.stepOrder, `Unknown step type: ${step.stepType}`, 'error');
-                }
-            }
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            updateReplayLog(runId, step.stepOrder, `Error: ${message}`, 'error');
-            finishReplay(runId, 'failed', message, db);
-            return;
-        }
+    // Track whether the run has already been finished (prevents double-finish)
+    let finished = false;
+    function finishOnce(status: 'succeeded' | 'failed' | 'stopped', error?: string) {
+        if (finished) return;
+        finished = true;
+        finishReplay(runId, status, error, db);
     }
 
-    finishReplay(runId, 'succeeded', undefined, db);
+    // Global timeout guard
+    const globalTimer = setTimeout(() => {
+        const msg = 'Global timeout after 15 minutes';
+        updateReplayLog(runId, 0, msg, 'error');
+        finishOnce('failed', msg);
+    }, GLOBAL_TIMEOUT_MS);
+
+    try {
+        for (let i = 0; i < steps.length; i++) {
+            const step = steps[i];
+            if (signal.aborted) {
+                updateReplayLog(runId, step.stepOrder, 'Replay stopped by user', 'info');
+                finishOnce('stopped', 'Stopped by user');
+                return;
+            }
+            // Bail early if another step already triggered a global timeout
+            if (finished) return;
+
+            try {
+                // Race the step execution against a per-step timeout
+                await Promise.race([
+                    (async () => {
+                        switch (step.stepType) {
+                            case 'tap': {
+                                if (step.x === undefined || step.y === undefined) {
+                                    throw new Error('Tap step missing coordinates');
+                                }
+                                await remote.performAction(deviceUdid, { type: 'tap', x: step.x, y: step.y });
+                                updateReplayLog(runId, step.stepOrder, `Tapped (${step.x}, ${step.y})${step.label ? ` — ${step.label}` : ''}`, 'info');
+                                break;
+                            }
+                            case 'swipe': {
+                                if (step.x === undefined || step.y === undefined || step.endX === undefined || step.endY === undefined || step.durationMs === undefined) {
+                                    throw new Error('Swipe step missing coordinates or duration');
+                                }
+                                await remote.performAction(deviceUdid, {
+                                    type: 'swipe',
+                                    startX: step.x,
+                                    startY: step.y,
+                                    endX: step.endX,
+                                    endY: step.endY,
+                                    durationMs: step.durationMs,
+                                });
+                                updateReplayLog(runId, step.stepOrder, `Swiped from (${step.x}, ${step.y}) to (${step.endX}, ${step.endY}) over ${step.durationMs}ms${step.label ? ` — ${step.label}` : ''}`, 'info');
+                                break;
+                            }
+                            case 'wait': {
+                                const ms = step.waitMs ?? 1000;
+                                await new Promise<void>((resolve, reject) => {
+                                    const timer = setTimeout(resolve, ms);
+                                    signal.addEventListener('abort', () => { clearTimeout(timer); reject(new Error('Aborted')); }, { once: true });
+                                });
+                                updateReplayLog(runId, step.stepOrder, `Waited ${ms}ms${step.label ? ` — ${step.label}` : ''}`, 'info');
+                                break;
+                            }
+                            case 'home': {
+                                await remote.performAction(deviceUdid, { type: 'home' });
+                                updateReplayLog(runId, step.stepOrder, `Pressed Home${step.label ? ` — ${step.label}` : ''}`, 'info');
+                                break;
+                            }
+                            case 'unlock': {
+                                await remote.performAction(deviceUdid, { type: 'unlock' });
+                                updateReplayLog(runId, step.stepOrder, `Unlocked device${step.label ? ` — ${step.label}` : ''}`, 'info');
+                                break;
+                            }
+                            case 'open_url': {
+                                if (!step.url) throw new Error('open_url step missing url');
+                                await remote.performAction(deviceUdid, { type: 'home' });
+                                await new Promise((r) => setTimeout(r, 1000));
+                                const linkDriver = await appiumSession(deviceUdid, 'com.apple.mobilesafari');
+                                try {
+                                    await linkDriver.execute('mobile: deepLink', { url: step.url });
+                                } finally {
+                                    await linkDriver.deleteSession().catch(() => {});
+                                }
+                                await new Promise((r) => setTimeout(r, 3000));
+                                updateReplayLog(runId, step.stepOrder, `Opened URL: ${step.url}${step.label ? ` — ${step.label}` : ''}`, 'info');
+                                break;
+                            }
+                            case 'app_action': {
+                                if (!step.appBundleId) throw new Error('app_action step missing appBundleId');
+                                await remote.performAction(deviceUdid, { type: 'home' });
+                                await new Promise((r) => setTimeout(r, 500));
+                                const appDriver = await appiumSession(deviceUdid, step.appBundleId);
+                                try {
+                                    if (step.appActionType === 'terminate') {
+                                        await appDriver.terminateApp(step.appBundleId);
+                                    } else {
+                                        await appDriver.activateApp(step.appBundleId);
+                                    }
+                                } finally {
+                                    await appDriver.deleteSession().catch(() => {});
+                                }
+                                await new Promise((r) => setTimeout(r, 2000));
+                                const actionLabel = step.appActionType === 'terminate' ? 'Terminated' : 'Launched';
+                                updateReplayLog(runId, step.stepOrder, `${actionLabel} app ${step.appBundleId}${step.label ? ` — ${step.label}` : ''}`, 'info');
+                                break;
+                            }
+                            case 'screenshot': {
+                                const buf = await remote.getScreenshot(deviceUdid);
+                                const { writeFile, mkdir } = await import('node:fs/promises');
+                                const pathModule = (await import('node:path')).default;
+                                const dataRoot = process.env.SCHEDULER_DATA_DIR ?? '.scheduler-data';
+                                const screenshotDir = pathModule.join(dataRoot, 'workflow-screenshots', runId);
+                                await mkdir(screenshotDir, { recursive: true });
+                                await writeFile(pathModule.join(screenshotDir, `step-${step.stepOrder}.png`), buf);
+                                updateReplayLog(runId, step.stepOrder, `Screenshot saved (step ${step.stepOrder})${step.label ? ` — ${step.label}` : ''}`, 'info');
+                                break;
+                            }
+                            case 'if_condition': {
+                                if (!step.aiQuestion) throw new Error('IF condition step missing aiQuestion');
+                                const buf = await remote.getScreenshot(deviceUdid);
+                                const { answer, reason } = await evaluateCondition(step.aiQuestion, buf);
+                                updateReplayLog(runId, step.stepOrder, `AI condition: "${step.aiQuestion}" → ${answer ? 'YES' : 'NO'} (${reason})${step.label ? ` — ${step.label}` : ''}`, 'condition');
+                                if (step.skipSteps) {
+                                    if (answer) {
+                                        i += step.skipSteps;
+                                        updateReplayLog(runId, step.stepOrder, `Condition met, skipping ${step.skipSteps} step(s)`, 'info');
+                                    } else {
+                                        updateReplayLog(runId, step.stepOrder, `Condition not met, continuing (skipping not triggered)`, 'info');
+                                    }
+                                } else {
+                                    if (!answer) {
+                                        updateReplayLog(runId, step.stepOrder, `Condition not met, stopping replay`, 'info');
+                                        finishOnce('stopped', `AI condition "${step.aiQuestion}" evaluated as NO: ${reason}`);
+                                        return;
+                                    }
+                                }
+                                break;
+                            }
+                            case 'type_keys': {
+                                if (!step.text) {
+                                    updateReplayLog(runId, step.stepOrder, `Skipping type_keys (no text)${step.label ? ` — ${step.label}` : ''}`, 'info');
+                                    break;
+                                }
+                                const bundleId = process.env.TIKTOK_BUNDLE_ID ?? 'com.zhiliaoapp.musically';
+                                const keyDriver = await appiumSession(deviceUdid, bundleId);
+                                try {
+                                    const appiumHost = process.env.APPIUM_HOST ?? '127.0.0.1';
+                                    const appiumPort = Number(process.env.APPIUM_PORT ?? 4725);
+                                    const response = await fetch(`http://${appiumHost}:${appiumPort}/session/${keyDriver.sessionId}/keys`, {
+                                        method: 'POST',
+                                        headers: { 'content-type': 'application/json' },
+                                        body: JSON.stringify({ value: [step.text] }),
+                                    });
+                                    if (!response.ok) throw new Error(`Appium type_keys failed: ${await response.text()}`);
+                                } finally {
+                                    await keyDriver.deleteSession().catch(() => {});
+                                }
+                                updateReplayLog(runId, step.stepOrder, `Typed caption`, 'info');
+                                break;
+                            }
+                            default: {
+                                updateReplayLog(runId, step.stepOrder, `Unknown step type: ${step.stepType}`, 'error');
+                            }
+                        }
+                    })(),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error(`Step ${step.stepOrder} timed out after ${STEP_TIMEOUT_MS / 1000}s`)), STEP_TIMEOUT_MS)
+                    ),
+                ]);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                updateReplayLog(runId, step.stepOrder, `Error: ${message}`, 'error');
+                finishOnce('failed', message);
+                return;
+            }
+        }
+
+        if (!finished) {
+            finishOnce('succeeded');
+        }
+    } finally {
+        clearTimeout(globalTimer);
+    }
 }
 
 export function createWorkflowPlugin(): PhoneFarmPlugin {
