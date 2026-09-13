@@ -272,6 +272,32 @@ async function runSteps(
                                 updateReplayLog(runId, step.stepOrder, `Unlocked device${step.label ? ` — ${step.label}` : ''}`, 'info');
                                 break;
                             }
+                            case 'import_video': {
+                                if (!step.text) throw new Error('import_video step missing video path (text field)');
+                                const wdaUrl = process.env.WDA_URL ?? 'http://127.0.0.1:8100';
+                                const { readFile } = await import('node:fs/promises');
+                                const pathModule = await import('node:path');
+                                const videoPath = pathModule.resolve(step.text);
+                                const data = await readFile(videoPath);
+                                if (data.length > 350 * 1024 * 1024) {
+                                    throw new Error(`Video is too large for import (max 350MB)`);
+                                }
+                                const importResponse = await fetch(`${wdaUrl}/wda/import-media`, {
+                                    method: 'POST',
+                                    headers: { 'content-type': 'application/json' },
+                                    body: JSON.stringify({
+                                        name: `import-${Date.now()}.mp4`,
+                                        mimeType: 'video/mp4',
+                                        data: data.toString('base64'),
+                                    }),
+                                });
+                                const importResult = await importResponse.json() as { value?: { error?: unknown } };
+                                if (!importResponse.ok || (importResult.value && typeof importResult.value === 'object' && 'error' in importResult.value)) {
+                                    throw new Error(`WDA media import failed: ${JSON.stringify(importResult)}`);
+                                }
+                                updateReplayLog(runId, step.stepOrder, `Imported video to device${step.label ? ` — ${step.label}` : ''}`, 'info');
+                                break;
+                            }
                             case 'open_url': {
                                 if (!step.url) throw new Error('open_url step missing url');
                                 await remote.performAction(deviceUdid, { type: 'home' });
@@ -703,34 +729,30 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 if (!udid) return reply.code(400).send({ error: 'No device assigned to this generation or workflow' });
 
                 // Find the video file
-                const { readdir, readFile } = await import('node:fs/promises');
+                const { readdir } = await import('node:fs/promises');
                 const pathModule = await import('node:path');
                 const VIDEO_OUTPUT = 'post.mp4';
                 const produced = await readdir(gen.outputDir);
                 const videoFile = produced.find((name) => name === VIDEO_OUTPUT);
                 if (!videoFile) return reply.code(409).send({ error: 'Generation produced no video file' });
-                const videoPath = pathModule.join(gen.outputDir, videoFile);
+                const videoPath = pathModule.resolve(pathModule.join(gen.outputDir, videoFile));
 
-                // Import video to device via WDA
-                const wdaUrl = process.env.WDA_URL ?? 'http://127.0.0.1:8100';
-                const data = await readFile(videoPath);
-                if (data.length > 350 * 1024 * 1024) {
-                    return reply.code(413).send({ error: 'Video is too large for import (max 350MB)' });
+                // Patch the import_video step with the video path so the workflow handles the import
+                const importVideoSteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
+                    .from(workflowSteps)
+                    .where(
+                        and(
+                            eq(workflowSteps.workflowId, workflowId),
+                            eq(workflowSteps.stepType, 'import_video'),
+                        )
+                    )
+                    .orderBy(asc(workflowSteps.stepOrder));
+                if (importVideoSteps.length === 0) {
+                    return reply.code(409).send({ error: 'Workflow has no import_video step; cannot queue' });
                 }
-                const importResponse = await fetch(`${wdaUrl}/wda/import-media`, {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({
-                        name: `gen-${generationId.slice(0, 8)}.mp4`,
-                        mimeType: 'video/mp4',
-                        data: data.toString('base64'),
-                    }),
-                });
-                const importResult = await importResponse.json() as { value?: { error?: unknown } };
-                if (!importResponse.ok || (importResult.value && typeof importResult.value === 'object' && 'error' in importResult.value)) {
-                    return reply.code(502).send({ error: `WDA media import failed: ${JSON.stringify(importResult)}` });
-                }
-                console.log(`Imported generation ${generationId} video to device ${udid}`);
+                await db.update(workflowSteps).set({ text: videoPath })
+                    .where(eq(workflowSteps.id, importVideoSteps[0]!.id));
+                console.log(`Patched import_video step with video path: ${videoPath}`);
 
                 // If caption provided, patch the first type_keys step in the workflow
                 // (the rest type_keys steps are for other purposes like hashtag spacing)
@@ -815,17 +837,23 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                         finishReplay(runId, 'failed', 'Unexpected error during replay', db);
                     })
                     .finally(() => {
-                        // Reset type_keys text so each queue starts fresh
-                        db.update(workflowSteps).set({ text: null })
+                        // Reset type_keys and import_video text so each queue starts fresh
+                        const resetText = () => db.update(workflowSteps).set({ text: null })
                             .where(and(
                                 eq(workflowSteps.workflowId, workflowId),
                                 eq(workflowSteps.stepType, 'type_keys'),
                             )).catch(() => {});
+                        const resetImport = () => db.update(workflowSteps).set({ text: null })
+                            .where(and(
+                                eq(workflowSteps.workflowId, workflowId),
+                                eq(workflowSteps.stepType, 'import_video'),
+                            )).catch(() => {});
+                        void Promise.all([resetText(), resetImport()]);
                     });
 
                 return reply.code(202).send({
                     ok: true,
-                    message: `Imported video to device and started workflow replay`,
+                    message: `Patched workflow with video path and started replay (import_video step will import during execution)`,
                     runId,
                     status: 'running',
                     totalSteps: steps.length,

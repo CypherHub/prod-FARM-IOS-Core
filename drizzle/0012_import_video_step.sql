@@ -1,0 +1,1 @@
+ALTER TYPE "scheduler"."workflow_step_type" ADD VALUE IF NOT EXISTS 'import_video';--> statement-breakpoint

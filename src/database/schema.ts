@@ -156,7 +156,7 @@ export const workflowStatus = schedulerSchema.enum('workflow_status', [
 ]);
 
 export const workflowStepType = schedulerSchema.enum('workflow_step_type', [
-    'tap', 'swipe', 'wait', 'if_condition', 'app_action', 'home', 'unlock', 'open_url', 'screenshot', 'type_keys', 'switch_account',
+    'tap', 'swipe', 'wait', 'if_condition', 'app_action', 'home', 'unlock', 'open_url', 'screenshot', 'type_keys', 'switch_account', 'import_video',
 ]);
 
 export const workflows = schedulerSchema.table('workflows', {

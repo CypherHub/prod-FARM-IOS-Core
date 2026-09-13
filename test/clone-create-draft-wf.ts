@@ -106,11 +106,43 @@ async function main() {
         });
     }
 
-    // Verify
-    const full = await api<{ steps: unknown[] }>(`${WF_API}/${wf.id}`);
+    // Add import_video step after unlock
+    console.log('Adding import_video step after unlock...');
+    const importStep = await api<{ id: string }>(`${WF_API}/${wf.id}/steps`, {
+        method: 'POST',
+        body: JSON.stringify({
+            stepType: 'import_video',
+            label: 'Import video to device photo library',
+        }),
+    });
+    console.log(`  Import step: ${importStep.id}`);
+
+    // Reorder so import_video sits right after unlock (position 2)
+    const full = await api<{ steps: Array<{ id: string; stepType: string; stepOrder: number }> }>(`${WF_API}/${wf.id}`);
+    const ordered = full.steps.sort((a, b) => a.stepOrder - b.stepOrder);
+    const unlockIdx = ordered.findIndex((s) => s.stepType === 'unlock');
+    const importIdx = ordered.findIndex((s) => s.stepType === 'import_video');
+    if (unlockIdx >= 0 && importIdx >= 0) {
+        const stepIds = ordered.map((s) => s.id);
+        // Move import_video to right after unlock
+        const [importId] = stepIds.splice(importIdx, 1);
+        stepIds.splice(unlockIdx + 1, 0, importId);
+        await api(`${WF_API}/${wf.id}/steps/reorder`, {
+            method: 'PUT',
+            body: JSON.stringify({ stepIds }),
+        });
+        console.log('Reordered: import_video now follows unlock');
+    }
+
+    // Verify final state
+    const final = await api<{ steps: Array<{ stepOrder: number; stepType: string; label: string | null }> }>(`${WF_API}/${wf.id}`);
+    const finalSteps = final.steps.sort((a, b) => a.stepOrder - b.stepOrder);
     console.log(`\n=== Clone Complete ===`);
     console.log(`New workflow ID: ${wf.id}`);
-    console.log(`Steps copied: ${full.steps.length}`);
+    console.log(`Steps copied: ${finalSteps.length}`);
+    for (const s of finalSteps) {
+        console.log(`  ${s.stepOrder}. ${s.stepType}${s.label ? ` — ${s.label}` : ''}`);
+    }
 
     console.log('\nUpdate create.html to use this workflow ID:');
     console.log(`  state.workflowId = '${wf.id}';`);

@@ -40,9 +40,14 @@ async function main() {
     const steps = full.steps.sort((a, b) => a.stepOrder - b.stepOrder);
     console.log(`${steps.length} steps`);
 
-    // Steps 36 is "Unfocus from Caption", 37 is "Tap Save Drafts", 38 is "Wait for save"
-    // We want: screenshot + if_condition BEFORE step 37 (Tap Save Drafts)
-    // Strategy: add new steps at end, then reorder all
+    // Find the "Tap / Save Drafts" step — the last tap step before saving to drafts
+    // We want: screenshot + if_condition BEFORE this step
+    const saveDraftsStepIdx = steps.findIndex((s) =>
+        s.stepType === 'tap' && s.label?.toLowerCase().includes('save')
+    );
+    if (saveDraftsStepIdx < 0) throw new Error('Could not find "Save Drafts" tap step');
+    const insertBeforeIdx = saveDraftsStepIdx;
+    console.log(`Inserting check before step ${insertBeforeIdx + 1}: "${steps[saveDraftsStepIdx].label}"`);
 
     console.log('\nAdding screenshot step before Save Drafts...');
     const screenshot = await api(`${WF_API}/${clone.id}/steps`, {
@@ -65,15 +70,13 @@ async function main() {
     });
     console.log(`  → Condition step: ${condition.id}`);
 
-    // Now reorder: insert the two new steps between 36 (Unfocus) and 37 (Tap Save Drafts)
+    // Now reorder: insert the two new steps before the Save Drafts tap
     const originalIds = steps.map((s) => s.id);
-    // Insert screenshot + condition after step 36 (index 35 in 0-based)
-    const insertIndex = 36; // after 0-based index 35 = step 36 "Unfocus from Caption"
     const newOrder = [
-        ...originalIds.slice(0, insertIndex),    // steps 1-36
-        screenshot.id,                            // screenshot (new)
-        condition.id,                             // condition (new)
-        ...originalIds.slice(insertIndex),         // steps 37-38
+        ...originalIds.slice(0, insertBeforeIdx),   // steps before Save Drafts
+        screenshot.id,                                // screenshot (new)
+        condition.id,                                 // condition (new)
+        ...originalIds.slice(insertBeforeIdx),        // Save Drafts + remaining
     ];
 
     console.log(`\nReordering ${newOrder.length} steps...`);

@@ -106,6 +106,7 @@ function stepIcon(type: string): string {
         case 'app_action': return '&#9881;';
         case 'screenshot': return '&#128247;';
         case 'type_keys': return '&#128221;';
+        case 'import_video': return '&#127910;';
         default: return '&#8212;';
     }
 }
@@ -123,6 +124,7 @@ function stepSummary(step: WorkflowStep): string {
         case 'app_action': return `${step.appActionType ?? 'activate'} ${escapeHtml(step.appBundleId)}${label}`;
         case 'screenshot': return `Screenshot${label}`;
         case 'type_keys': return `Type keys: ${escapeHtml(step.text?.slice(0, 40))}${label}`;
+        case 'import_video': return `Import video: ${escapeHtml(step.text?.slice(0, 40))}${label}`;
         default: return step.stepType;
     }
 }
@@ -223,6 +225,10 @@ function renderStepParams(step: WorkflowStep): string {
         case 'unlock':
         case 'screenshot':
             return `<p class="hint">This step has no additional configuration.</p>`;
+        case 'import_video':
+            return `
+                <div class="field" style="grid-column:1/-1"><label>Video file path<input id="dt-text" type="text" value="${escapeHtml(step.text ?? '')}" style="width:100%" placeholder="/path/to/video.mp4"></label></div>
+                <p class="hint">Imports a video file from the server filesystem to the device&#39;s photo library via WDA. The file path is set automatically when queuing a generation.</p>`;
         default:
             return '';
     }
@@ -281,6 +287,8 @@ function renderStepTypeFields(stepType: string): string {
         case 'unlock':
         case 'screenshot':
             return `<p class="hint">This step type requires no additional parameters.</p>`;
+        case 'import_video':
+            return `<p class="hint">Imports a video file from the server filesystem to the device&#39;s photo library via WDA. The file path is set automatically when queuing a generation.</p>`;
         default:
             return '';
     }
