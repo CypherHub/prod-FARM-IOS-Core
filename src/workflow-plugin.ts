@@ -716,7 +716,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     // Only patch the FIRST type_keys step (the main caption entry)
                     // to avoid typing the caption into auxiliary type_keys steps
                     if (typeKeySteps.length > 0) {
-                        await db.update(workflowSteps).set({ text: caption.trim() + '  ' })
+                        await db.update(workflowSteps).set({ text: caption.trim() + '\u00A0\u00A0' })
                             .where(eq(workflowSteps.id, typeKeySteps[0]!.id));
                     }
                 }
