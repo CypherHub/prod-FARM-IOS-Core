@@ -114,7 +114,7 @@ async function evaluateCondition(
         messages: [
             {
                 role: 'system',
-                content: 'You answer YES or NO to a question based on the current screenshot of an iPhone. Return ONLY a JSON object with keys: answer ("yes" or "no"), reason (short explanation).',
+                content: 'You answer YES or NO to a question based on the current screenshot of an iPhone. Respond with ONLY a valid JSON object — no markdown, no backticks, no extra text: {"answer": "yes"|"no", "reason": "short explanation"}. NEVER include trailing commas, and always double-quote all keys and string values.',
             },
             {
                 role: 'user',
@@ -147,7 +147,22 @@ async function evaluateCondition(
     // Extract JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     const json = jsonMatch?.[0] ?? content;
-    const parsed = JSON.parse(json) as { answer?: string; reason?: string };
+
+    let parsed: { answer?: string; reason?: string };
+    try {
+        parsed = JSON.parse(json) as { answer?: string; reason?: string };
+    } catch {
+        // Attempt to fix common JSON issues: trailing commas, single quotes, unquoted keys
+        const cleaned = json
+            .replace(/,(\s*[}\]])/g, '$1')     // remove trailing commas before } or ]
+            .replace(/'/g, '"')                 // single quotes → double quotes
+            .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // unquoted keys → quoted keys
+        try {
+            parsed = JSON.parse(cleaned) as { answer?: string; reason?: string };
+        } catch {
+            throw new Error(`AI returned invalid JSON: ${content.slice(0, 200)}`);
+        }
+    }
     const answer = String(parsed.answer ?? '').trim().toLowerCase();
 
     if (answer !== 'yes' && answer !== 'no') {
