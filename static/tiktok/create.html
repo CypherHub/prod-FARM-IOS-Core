@@ -388,6 +388,7 @@
                         deviceUdid: deviceUdid || undefined,
                         account: account || undefined,
                         hookRunId: state.hookRunId || undefined,
+                        targetSeconds: state.targetSeconds || undefined,
                     }),
                 });
                 state.draftIds = drafts.map((d) => d.id);
@@ -469,6 +470,8 @@
                     });
                     draft.hook = field('hook');
                     draft.caption = field('caption');
+                    // Trigger save — renders the video and marks as saved
+                    await jsonRequest(`/api/local-drafts/${draft.id}/save`, { method: 'POST' });
                     showError(errorNode, null);
                 } catch (error) { showError(errorNode, error); }
             });

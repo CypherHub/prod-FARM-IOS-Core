@@ -926,10 +926,11 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     deviceUdid?: string;
                     account?: string;
                     hookRunId?: string;
+                    targetSeconds?: number | null;
                 };
             }>('/api/bookmarks/:id/local-drafts', async (request, reply) => {
                 const { id } = request.params;
-                const { hooks, galleryName, deviceUdid, account, hookRunId } = request.body;
+                const { hooks, galleryName, deviceUdid, account, hookRunId, targetSeconds } = request.body;
                 if (!hooks?.length) return reply.code(400).send({ error: 'At least one hook is required' });
                 if (!galleryName) return reply.code(400).send({ error: 'galleryName is required' });
 
@@ -960,35 +961,62 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     }
 
                     // 2. Auto-assign unique trim times for this draft
-                    //    Use the hook text as a seed so same hook gets same trim, but cycles through available ranges
                     let trimStart = 0;
-                    const minDuration = Math.min(5, clip.durationSeconds - 1);
-                    const maxDuration = Math.min(15, clip.durationSeconds);
-
-                    // Try to find a non-overlapping unique range
-                    let attempts = 0;
                     let trimEnd: number | null = null;
-                    while (attempts < 30) {
-                        const startCandidate = Math.max(0, Math.floor(Math.random() * (clip.durationSeconds - minDuration)));
-                        const maxEnd = Math.min(clip.durationSeconds, startCandidate + maxDuration);
-                        const duration = minDuration + Math.random() * (maxEnd - startCandidate - minDuration);
-                        const endCandidate = Math.min(clip.durationSeconds, startCandidate + duration);
 
-                        // Check overlap with existing used ranges
-                        const overlaps = usedRanges.some((r) =>
-                            !(endCandidate <= r.start + 0.5 || startCandidate >= r.end - 0.5)
-                        );
+                    const fixedDuration = targetSeconds ?? null;
 
-                        if (!overlaps || attempts >= 20) {
-                            trimStart = startCandidate;
-                            trimEnd = Math.round(endCandidate * 10) / 10;
-                            usedRanges.push({ start: trimStart, end: trimEnd });
-                            break;
+                    if (fixedDuration != null && fixedDuration > 0) {
+                        // Use the template's target duration as the exact clip length.
+                        // Find a random start such that the full duration fits within the clip.
+                        const maxStart = Math.max(0, clip.durationSeconds - fixedDuration);
+                        if (maxStart > 0) {
+                            // Try to find a non-overlapping window
+                            let attempts = 0;
+                            while (attempts < 30) {
+                                const startCandidate = Math.round(Math.random() * maxStart * 10) / 10;
+                                const endCandidate = Math.round((startCandidate + fixedDuration) * 10) / 10;
+                                const overlaps = usedRanges.some((r) =>
+                                    !(endCandidate <= r.start + 0.5 || startCandidate >= r.end - 0.5)
+                                );
+                                if (!overlaps || attempts >= 20) {
+                                    trimStart = startCandidate;
+                                    trimEnd = endCandidate;
+                                    usedRanges.push({ start: trimStart, end: trimEnd });
+                                    break;
+                                }
+                                attempts++;
+                            }
+                        } else {
+                            // Clip is too short for the full target duration — just use the whole clip
+                            trimStart = 0;
+                            trimEnd = clip.durationSeconds;
                         }
-                        attempts++;
+                    } else {
+                        // No target duration — fall back to random 5-15s window
+                        const minDuration = Math.min(5, clip.durationSeconds - 1);
+                        const maxDuration = Math.min(15, clip.durationSeconds);
+                        let attempts = 0;
+                        while (attempts < 30) {
+                            const startCandidate = Math.max(0, Math.floor(Math.random() * (clip.durationSeconds - minDuration)));
+                            const maxEnd = Math.min(clip.durationSeconds, startCandidate + maxDuration);
+                            const duration = minDuration + Math.random() * (maxEnd - startCandidate - minDuration);
+                            const endCandidate = Math.min(clip.durationSeconds, startCandidate + duration);
+                            const overlaps = usedRanges.some((r) =>
+                                !(endCandidate <= r.start + 0.5 || startCandidate >= r.end - 0.5)
+                            );
+                            if (!overlaps || attempts >= 20) {
+                                trimStart = startCandidate;
+                                trimEnd = Math.round(endCandidate * 10) / 10;
+                                usedRanges.push({ start: trimStart, end: trimEnd });
+                                break;
+                            }
+                            attempts++;
+                        }
                     }
 
-                    const durationSeconds = trimEnd != null ? Math.round((trimEnd - trimStart) * 10) / 10 : null;
+                    const durationSeconds = fixedDuration != null ? fixedDuration
+                        : (trimEnd != null ? Math.round((trimEnd - trimStart) * 10) / 10 : null);
 
                     const [row] = await db.insert(localDrafts).values({
                         bookmarkId: id,
@@ -1133,11 +1161,25 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 const udid = draft.deviceUdid ?? wf.deviceUdid;
                 if (!udid) return reply.code(400).send({ error: 'No device assigned to this draft or workflow' });
 
-                // Resolve gallery video file path
+                // Render the trimmed video with hook overlay first
+                const { compositeVideo } = await import('./content/composite.js');
                 const { resolveGalleryFile } = await import('./content/gallery.js');
+                const { mkdtemp } = await import('node:fs/promises');
+                const pathModule = await import('node:path');
+                const os = await import('node:os');
+                const outputDir = await mkdtemp(pathModule.join(os.tmpdir(), 'draft-queue-'));
+                const renderedPath = pathModule.join(outputDir, 'post.mp4');
                 const clipPath = resolveGalleryFile(draft.galleryName, draft.galleryVideo);
+                await compositeVideo({
+                    clipPath,
+                    trimStartSeconds: draft.trimStartSeconds,
+                    durationSeconds: draft.durationSeconds ?? 5,
+                    hook: draft.hook,
+                    hookAlign: draft.hookAlign as 'left' | 'center' | 'right',
+                    outputPath: renderedPath,
+                });
 
-                // Patch the import_video step with the video path
+                // Patch the import_video step with the rendered video path (not the raw clip)
                 const importVideoSteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
                     .from(workflowSteps)
                     .where(
@@ -1148,9 +1190,11 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     )
                     .orderBy(asc(workflowSteps.stepOrder));
                 if (importVideoSteps.length === 0) {
+                    // Clean up temp dir before returning
+                    await import('node:fs/promises').then((f) => f.rm(outputDir, { recursive: true, force: true }).catch(() => {}));
                     return reply.code(409).send({ error: 'Workflow has no import_video step; cannot queue' });
                 }
-                await db.update(workflowSteps).set({ text: clipPath })
+                await db.update(workflowSteps).set({ text: renderedPath })
                     .where(eq(workflowSteps.id, importVideoSteps[0]!.id));
 
                 // Patch caption into the first type_keys step
@@ -1188,12 +1232,19 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 const steps = await db.select().from(workflowSteps)
                     .where(eq(workflowSteps.workflowId, workflowId))
                     .orderBy(asc(workflowSteps.stepOrder));
-                if (steps.length === 0) return reply.code(409).send({ error: 'Workflow has no steps' });
+                if (steps.length === 0) {
+                    await import('node:fs/promises').then((f) => f.rm(outputDir, { recursive: true, force: true }).catch(() => {}));
+                    return reply.code(409).send({ error: 'Workflow has no steps' });
+                }
 
                 const runId = startReplayEntry(workflowId, wf.name, udid, steps.length, db);
                 const abortController = new AbortController();
                 runSteps(context.remote, udid, steps, abortController.signal, runId, db)
-                    .catch(() => finishReplay(runId, 'failed', 'Unexpected error during replay', db));
+                    .catch(() => finishReplay(runId, 'failed', 'Unexpected error during replay', db))
+                    .finally(() => {
+                        // Clean up rendered temp video after workflow completes
+                        void import('node:fs/promises').then((f) => f.rm(outputDir, { recursive: true, force: true }).catch(() => {}));
+                    });
 
                 await db.update(localDrafts).set({ status: 'queued', updatedAt: new Date() })
                     .where(eq(localDrafts.id, draft.id));
@@ -1207,8 +1258,36 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 });
             });
 
-            // Save a local draft (mark as saved)
+            // Save a local draft — render the trimmed video with hook overlay and store it
             app.post<{ Params: { id: string } }>('/api/local-drafts/:id/save', async (request, reply) => {
+                const [draft] = await db.select().from(localDrafts).where(eq(localDrafts.id, request.params.id));
+                if (!draft) return reply.code(404).send({ error: 'Local draft not found' });
+
+                // Render trimmed video with hook overlay
+                try {
+                    const { compositeVideo } = await import('./content/composite.js');
+                    const { resolveGalleryFile } = await import('./content/gallery.js');
+                    const { mkdir } = await import('node:fs/promises');
+                    const pathModule = await import('node:path');
+                    const dataRoot = process.env.SCHEDULER_DATA_DIR ?? '.scheduler-data';
+                    const draftDir = pathModule.join(dataRoot, 'drafts', draft.id);
+                    await mkdir(draftDir, { recursive: true });
+                    const outputPath = pathModule.join(draftDir, 'post.mp4');
+                    const clipPath = resolveGalleryFile(draft.galleryName, draft.galleryVideo);
+                    await compositeVideo({
+                        clipPath,
+                        trimStartSeconds: draft.trimStartSeconds,
+                        durationSeconds: draft.durationSeconds ?? 5,
+                        hook: draft.hook,
+                        hookAlign: draft.hookAlign as 'left' | 'center' | 'right',
+                        outputPath,
+                    });
+                } catch (error) {
+                    // Render failed — still mark as saved but include the error
+                    console.error(`Failed to render video for draft ${draft.id}:`, error);
+                }
+
+                // Mark as saved regardless of render success
                 const [row] = await db.update(localDrafts).set({ status: 'saved', updatedAt: new Date() })
                     .where(eq(localDrafts.id, request.params.id)).returning();
                 if (!row) return reply.code(404).send({ error: 'Local draft not found' });
