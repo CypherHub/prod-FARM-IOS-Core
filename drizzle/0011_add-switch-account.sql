@@ -1,0 +1,1 @@
+ALTER TYPE "scheduler"."workflow_step_type" ADD VALUE 'switch_account';--> statement-breakpoint

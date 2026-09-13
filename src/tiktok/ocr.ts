@@ -62,6 +62,12 @@ export function findHandleMatch(words: OcrWord[], targetHandle: string): OcrWord
     if (!target) return undefined;
     const exact = words.find((word) => normalizeHandle(word.text) === target);
     if (exact) return exact;
+    // Also try matching with dots removed — OCR often reads dots as spaces
+    const targetNoDots = target.replace(/\./g, '');
+    if (targetNoDots !== target) {
+        const exactNoDot = words.find((word) => normalizeHandle(word.text).replace(/\./g, '') === targetNoDots);
+        if (exactNoDot) return exactNoDot;
+    }
     const fuzzy = words.find((word) => {
         const normalized = normalizeHandle(word.text);
         if (normalized.length < 4 || target.length < 4) return false;

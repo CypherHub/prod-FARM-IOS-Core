@@ -118,14 +118,23 @@ export async function switchTikTokAccount(
         profileWords = await recognizeWords(await remote.getScreenshot(udid));
     }
 
-    if (findHandleMatch(profileWords, targetHandle)) {
+    // If the switcher drawer is open, the handle appearing just means it's an
+    // available account — don't short-circuit. We need to tap the row.
+    const accountAlreadyActive = findHandleMatch(profileWords, targetHandle) && !switcherIsOpen(profileWords);
+    if (accountAlreadyActive) {
         console.log(`Already on TikTok account ${targetHandle}`);
         return;
     }
 
-    const MAX_SWITCHER_OPEN_ATTEMPTS = 4;
+    // If the switcher is already open (profile tab tap opened it), skip the opening loop
     let switcherWords: OcrWord[] = [];
-    let opened = false;
+    let opened = switcherIsOpen(profileWords);
+    if (opened) {
+        switcherWords = profileWords;
+        console.log('Account switcher already open after profile tab tap');
+    }
+
+    const MAX_SWITCHER_OPEN_ATTEMPTS = 4;
     for (let attempt = 1; attempt <= MAX_SWITCHER_OPEN_ATTEMPTS && !opened; attempt += 1) {
         await tapCoordinate(driver, coords.switcherTriggerX, coords.switcherTriggerY, `Account switcher (attempt ${attempt})`);
         await driver.pause(1500);
@@ -151,7 +160,8 @@ export async function switchTikTokAccount(
     await driver.pause(1000);
 
     const verifyWords = await recognizeWords(await remote.getScreenshot(udid));
-    if (!findHandleMatch(verifyWords, targetHandle)) {
+    const verifyMatched = findHandleMatch(verifyWords, targetHandle);
+    if (!verifyMatched) {
         const screenshotPath = path.resolve('.wda', `account-switch-failed-${udid}.png`);
         await mkdir(path.dirname(screenshotPath), { recursive: true });
         await writeFile(screenshotPath, await remote.getScreenshot(udid));

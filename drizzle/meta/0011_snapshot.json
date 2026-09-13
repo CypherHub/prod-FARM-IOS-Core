@@ -1,0 +1,18 @@
+{
+  "id": "0011-add-switch-account",
+  "prevId": "268b3464-f1f1-4f4b-bc85-699b3caa2695",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {},
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

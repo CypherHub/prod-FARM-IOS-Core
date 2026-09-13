@@ -62,7 +62,7 @@ export interface TaskRetryPolicy {
 }
 
 export type WorkflowStatus = 'draft' | 'active' | 'completed' | 'archived';
-export type WorkflowStepType = 'tap' | 'swipe' | 'wait' | 'if_condition' | 'app_action' | 'home' | 'unlock' | 'open_url' | 'screenshot' | 'type_keys';
+export type WorkflowStepType = 'tap' | 'swipe' | 'wait' | 'if_condition' | 'app_action' | 'home' | 'unlock' | 'open_url' | 'screenshot' | 'type_keys' | 'switch_account';
 
 export interface Workflow {
     id: string;

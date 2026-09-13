@@ -7,6 +7,10 @@ import { screenshotToJpeg } from './tiktok/vision-guide.js';
 import { tiktokAppiumCapabilities } from './tiktok/appium-session.js';
 import type { PhoneFarmPlugin, PluginRouteContext } from './plugin.js';
 import type { WorkflowStatus, WorkflowStepType, WorkflowStep } from './types.js';
+import { switchTikTokAccount, type AccountSwitchCoords } from './tiktok/actions.js';
+import { foregroundTikTok } from './tiktok/appium-session.js';
+import { resolveDeviceCoordinates } from './devices/coordinates.js';
+import { coordinateProfile } from './tiktok/runtime-settings.js';
 
 // A lightweight Appium session that attaches to an already-running app without
 // killing or relaunching it. Uses the existing WDA via webDriverAgentUrl to
@@ -353,6 +357,33 @@ async function runSteps(
                                     await keyDriver.deleteSession().catch(() => {});
                                 }
                                 updateReplayLog(runId, step.stepOrder, `Typed caption`, 'info');
+                                break;
+                            }
+                            case 'switch_account': {
+                                if (!step.text) {
+                                    updateReplayLog(runId, step.stepOrder, `Skipping switch_account (no account handle)${step.label ? ` — ${step.label}` : ''}`, 'info');
+                                    break;
+                                }
+                                const targetAccount = step.text;
+                                const tiktokBundleId = process.env.TIKTOK_BUNDLE_ID ?? 'com.zhiliaoapp.musically';
+                                // Unlock device first
+                                await remote.performAction(deviceUdid, { type: 'unlock' });
+                                await new Promise((r) => setTimeout(r, 2000));
+                                const switchDriver = await appiumSession(deviceUdid, tiktokBundleId);
+                                try {
+                                    await foregroundTikTok(switchDriver, tiktokBundleId);
+                                    await new Promise((r) => setTimeout(r, 3000));
+                                    const accountCoords: AccountSwitchCoords = {
+                                        profileTabX: step.endX ?? 190,
+                                        profileTabY: step.endY ?? 120,
+                                        switcherTriggerX: step.x ?? 210,
+                                        switcherTriggerY: step.y ?? 121,
+                                    };
+                                    await switchTikTokAccount(switchDriver, remote as any, deviceUdid, targetAccount, accountCoords);
+                                } finally {
+                                    await switchDriver.deleteSession().catch(() => {});
+                                }
+                                updateReplayLog(runId, step.stepOrder, `Switched to TikTok account "${targetAccount}"`, 'info');
                                 break;
                             }
                             default: {
@@ -732,6 +763,36 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 if (!wf.deviceUdid || wf.deviceUdid !== udid) {
                     await db.update(workflows).set({ deviceUdid: udid, updatedAt: new Date() })
                         .where(eq(workflows.id, workflowId));
+                }
+
+                // Switch TikTok account if the generation specifies one
+                if (gen.account) {
+                    const devices = await context.loadDevices();
+                    const device = devices.find((d) => d.udid === udid);
+                    if (!device) {
+                        return reply.code(400).send({ error: `Device ${udid} not found in registry` });
+                    }
+                    const profile = coordinateProfile(device);
+                    const coords = resolveDeviceCoordinates(profile, device.coordinates);
+                    const accountCoords: AccountSwitchCoords = {
+                        profileTabX: coords.tiktok.profileTab.x,
+                        profileTabY: coords.tiktok.profileTab.y,
+                        switcherTriggerX: coords.tiktok.accountSwitcher.x,
+                        switcherTriggerY: coords.tiktok.accountSwitcher.y,
+                    };
+                    const tiktokBundleId = process.env.TIKTOK_BUNDLE_ID ?? 'com.zhiliaoapp.musically';
+                    // Unlock device first — Appium can't launch apps on a locked device
+                    await context.remote.performAction(udid, { type: 'unlock' });
+                    // Wait for the device to fully settle after unlock before Appium tries to connect
+                    await new Promise((r) => setTimeout(r, 2000));
+                    const switchDriver = await appiumSession(udid, tiktokBundleId);
+                    try {
+                        await foregroundTikTok(switchDriver, tiktokBundleId);
+                        await new Promise((r) => setTimeout(r, 3000));
+                        await switchTikTokAccount(switchDriver, context.remote as any, udid, gen.account, accountCoords);
+                    } finally {
+                        await switchDriver.deleteSession().catch(() => {});
+                    }
                 }
 
                 // Get all steps
