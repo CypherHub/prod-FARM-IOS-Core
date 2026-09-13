@@ -1,0 +1,188 @@
+{
+  "id": "0013-local-drafts",
+  "prevId": "0012-import_video_step",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "scheduler.local_drafts": {
+      "name": "local_drafts",
+      "schema": "scheduler",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "bookmark_id": {
+          "name": "bookmark_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hook_run_id": {
+          "name": "hook_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gallery_name": {
+          "name": "gallery_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gallery_video": {
+          "name": "gallery_video",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trim_start_seconds": {
+          "name": "trim_start_seconds",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "trim_end_seconds": {
+          "name": "trim_end_seconds",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hook": {
+          "name": "hook",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hook_align": {
+          "name": "hook_align",
+          "type": "hook_align",
+          "typeSchema": "scheduler",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'left'"
+        },
+        "caption": {
+          "name": "caption",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "device_udid": {
+          "name": "device_udid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "account": {
+          "name": "account",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "local_draft_status",
+          "typeSchema": "scheduler",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "local_drafts_bookmark_idx": {
+          "name": "local_drafts_bookmark_idx",
+          "columns": [
+            {
+              "expression": "bookmark_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "local_drafts_bookmark_id_bookmarks_id_fk": {
+          "name": "local_drafts_bookmark_id_bookmarks_id_fk",
+          "tableFrom": "local_drafts",
+          "tableTo": "bookmarks",
+          "schemaTo": "scheduler",
+          "columnsFrom": ["bookmark_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "local_drafts_hook_run_id_hook_runs_id_fk": {
+          "name": "local_drafts_hook_run_id_hook_runs_id_fk",
+          "tableFrom": "local_drafts",
+          "tableTo": "hook_runs",
+          "schemaTo": "scheduler",
+          "columnsFrom": ["hook_run_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "scheduler.local_draft_status": {
+      "name": "local_draft_status",
+      "schema": "scheduler",
+      "values": ["draft", "saved", "queued"]
+    }
+  },
+  "schemas": {
+    "scheduler": "scheduler"
+  },
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

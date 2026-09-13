@@ -64,6 +64,28 @@ export interface TaskRetryPolicy {
 export type WorkflowStatus = 'draft' | 'active' | 'completed' | 'archived';
 export type WorkflowStepType = 'tap' | 'swipe' | 'wait' | 'if_condition' | 'app_action' | 'home' | 'unlock' | 'open_url' | 'screenshot' | 'type_keys' | 'switch_account' | 'import_video';
 
+export type LocalDraftStatus = 'draft' | 'saved' | 'queued';
+export type HookAlign = 'left' | 'center' | 'right';
+
+export interface LocalDraft {
+    id: string;
+    bookmarkId: string;
+    hookRunId?: string;
+    galleryName: string;
+    galleryVideo: string;
+    trimStartSeconds: number;
+    trimEndSeconds?: number;
+    durationSeconds?: number;
+    hook: string;
+    hookAlign: HookAlign;
+    caption: string;
+    deviceUdid?: string;
+    account?: string;
+    status: LocalDraftStatus;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 export interface Workflow {
     id: string;
     name: string;

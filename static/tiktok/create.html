@@ -20,6 +20,7 @@
         .hook-option:has(input:checked) { border-color: var(--accent, #ff365e); background: rgba(255,255,255,0.05); }
         .hook-option pre { margin: 0; font: inherit; white-space: pre-wrap; min-height: 1.2em; }
         .hook-row { display: grid; gap: 8px; }
+        .hook-row textarea { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border, rgba(255,255,255,0.14)); background: rgba(255,255,255,0.04); color: inherit; width: 100%; resize: vertical; min-height: 2.5em; }
         .align-group { display: flex; gap: 4px; align-items: center; font-size: 0.72rem; opacity: 0.75; }
         .align-group button { border: 1px solid var(--border, rgba(255,255,255,0.14)); background: transparent;
             color: inherit; border-radius: 6px; padding: 2px 9px; cursor: pointer; font: inherit; font-size: 0.72rem; }
@@ -29,6 +30,10 @@
         .batch-card { border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 12px; padding: 16px 18px; }
         .batch-card header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 10px; }
         .batch-card .hook { font-weight: 600; }
+        .batch-card video { width: 100%; border-radius: 8px; max-height: 320px; background: #000; }
+        .batch-card .meta { font-size: 0.78rem; opacity: 0.65; margin: 6px 0; }
+        .hook-video-slot { display: grid; gap: 10px; }
+        .hook-video-slot .clip-info { font-size: 0.78rem; opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -52,57 +57,61 @@
             <div>
                 <span class="eyebrow"><a id="back" href="/library">← Template</a></span>
                 <h1>Create content</h1>
-                <p id="subtitle">Write hooks, choose the ones worth building, then generate.</p>
+                <p id="subtitle">Write hooks + captions, assign gallery videos, then build local drafts.</p>
             </div>
         </header>
         <p id="page-error" class="status error" hidden></p>
 
         <div class="steps">
+            <!-- Step 1: Hooks + Captions -->
             <section class="step" id="step-1">
-                <h2 class="step-title"><span class="step-badge">1</span>Write the hooks</h2>
-                <p class="field-help">The hook is the on-screen text. Ask for suggestions, write your own, or both. A blank line between lines is kept as a pause.</p>
+                <h2 class="step-title"><span class="step-badge">1</span>Write hooks + captions</h2>
+                <p class="field-help">The hook is the on-screen text. Each hook gets an auto-generated caption. A blank line between lines is kept as a pause.</p>
                 <div class="field wide">
                     <label for="prompt">Extra instructions (optional)</label>
-                    <textarea id="prompt" rows="3" placeholder="e.g. lean funnier, mention the Kickstarter price"></textarea>
+                    <textarea id="prompt" rows="2" placeholder="e.g. lean funnier, mention the Kickstarter price"></textarea>
                 </div>
                 <div class="form-actions">
-                    <button class="button primary" id="suggest" type="button">Suggest 5 hooks</button>
+                    <button class="button primary" id="suggest" type="button">Suggest 5 hooks with captions</button>
                 </div>
                 <div id="hook-status"></div>
             </section>
 
+            <!-- Step 2: Account + Gallery -->
             <section class="step" id="step-2">
-                <h2 class="step-title"><span class="step-badge">2</span>Pick the ones to build</h2>
-                <div id="hooks"><p class="field-help">Suggest hooks above, or write your own below.</p></div>
-                <div class="field wide">
-                    <label for="custom">Write your own hook</label>
-                    <textarea id="custom" rows="2" placeholder="Type a hook and press Add"></textarea>
-                    <div class="form-actions"><button class="button secondary" id="add" type="button">Add hook</button></div>
-                </div>
-            </section>
-
-            <section class="step" id="step-3">
-                <h2 class="step-title"><span class="step-badge">3</span>Build</h2>
-                <div class="field">
-                    <label for="gallery">Gallery</label>
-                    <select id="gallery"></select>
-                    <p class="field-help" id="gallery-help"></p>
-                </div>
+                <h2 class="step-title"><span class="step-badge">2</span>Select account &amp; gallery</h2>
                 <div class="split">
-                    <div class="field" id="clip-field">
-                        <label for="clip">Source clip</label>
-                        <select id="clip"><option value="">Let the AI pick</option></select>
-                        <p class="field-help" id="clip-help"></p>
-                    </div>
                     <div class="field">
                         <label for="target">Post to</label>
                         <select id="target"></select>
                         <p class="field-help">Drafts are queued to this device and account.</p>
                     </div>
+                    <div class="field">
+                        <label for="gallery">Gallery</label>
+                        <select id="gallery"></select>
+                        <p class="field-help" id="gallery-help">Choose a gallery with video clips.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 3: Pick hooks + assign videos -->
+            <section class="step" id="step-3">
+                <h2 class="step-title"><span class="step-badge">3</span>Pick hooks &amp; assign videos</h2>
+                <div id="hooks"><p class="field-help">Suggest hooks above first, then select the ones to build.</p></div>
+                <div class="field wide">
+                    <label for="custom">Write your own hook</label>
+                    <textarea id="custom" rows="2" placeholder="Type a hook and press Add"></textarea>
+                    <div class="form-actions"><button class="button secondary" id="add" type="button">Add hook</button></div>
                 </div>
                 <div class="form-actions">
-                    <button class="button primary" id="create" type="button" disabled>Create videos</button>
+                    <button class="button primary" id="create" type="button" disabled>Build local drafts</button>
                 </div>
+            </section>
+
+            <!-- Step 4: Review drafts -->
+            <section class="step" id="step-4">
+                <h2 class="step-title"><span class="step-badge">4</span>Review local drafts</h2>
+                <p class="field-help">Drafts reference gallery clips — no video processing until you download or queue.</p>
                 <div class="batch" id="batch"></div>
             </section>
         </div>
@@ -121,29 +130,24 @@
             gallery: element('#gallery'), galleryHelp: element('#gallery-help'), prompt: element('#prompt'),
             suggest: element('#suggest'), hookStatus: element('#hook-status'), hooks: element('#hooks'),
             custom: element('#custom'), add: element('#add'),
-            clipField: element('#clip-field'), clip: element('#clip'), clipHelp: element('#clip-help'),
             target: element('#target'), create: element('#create'), batch: element('#batch'),
-            step1: element('#step-1'), step2: element('#step-2'), step3: element('#step-3'),
+            step1: element('#step-1'), step2: element('#step-2'), step3: element('#step-3'), step4: element('#step-4'),
         };
 
-        // Hooks are objects so a custom one can be labelled and identity is stable
-        // across re-renders — the selection lives on the object, not on an index.
         const state = {
-            bookmark: null, galleries: [], devices: [], clips: [], targetSeconds: null,
-            hooks: [], hookRunId: null, busy: false, generationIds: [],
-            workflowId: null,
+            bookmark: null, galleries: [], devices: [], galleryClips: [], targetSeconds: null,
+            hooks: [], hookRunId: null, busy: false, draftIds: [],
         };
 
         el.back.href = `/library/bookmarks/${encodeURIComponent(bookmarkId)}`;
 
         function selectedHooks() { return state.hooks.filter((hook) => hook.selected); }
 
-        /** Only the count and the button change on a tick, so the list is never rebuilt. */
         function refreshCreateButton() {
             const count = selectedHooks().length;
-            el.create.textContent = count ? `Create ${count} ${count === 1 ? 'video' : 'videos'}` : 'Create videos';
-            el.create.disabled = count === 0 || state.bookmark?.status !== 'ready';
-            el.step2.dataset.done = String(count > 0);
+            el.create.textContent = count ? `Build ${count} local ${count === 1 ? 'draft' : 'drafts'}` : 'Build local drafts';
+            el.create.disabled = count === 0 || !el.gallery.value;
+            el.step3.dataset.done = String(count > 0 && !!el.gallery.value);
         }
 
         function renderHooks() {
@@ -153,44 +157,99 @@
                 return;
             }
             el.hooks.innerHTML = `<div class="hook-list">${state.hooks.map((hook, index) => `
-                <div class="hook-option">
+                <div class="hook-option" data-hook-index="${index}">
                     <input type="checkbox" data-index="${index}" ${hook.selected ? 'checked' : ''} aria-label="Use this hook">
                     <div class="hook-row">
                         ${hook.custom ? '<span class="tag">yours</span>' : ''}
-                        <pre style="text-align:${hook.align}">${escapeHtml(hook.text)}</pre>
+                        <label style="font-size:0.72rem;opacity:0.6;display:block">Hook text</label>
+                        <textarea data-hook-text="${index}" rows="${Math.max(2, (hook.text.match(/\n/g) || []).length + 1)}" style="text-align:${hook.align}">${escapeHtml(hook.text)}</textarea>
                         <span class="align-group" data-align-for="${index}">Align
                             ${['left', 'center', 'right'].map((align) =>
                                 `<button type="button" data-align="${align}" aria-pressed="${hook.align === align}">${align}</button>`).join('')}
                         </span>
+                        <label style="font-size:0.72rem;opacity:0.6;display:block;margin-top:6px">Caption <small>auto-generated — edit freely</small></label>
+                        <textarea data-caption-text="${index}" rows="${Math.max(2, (hook.caption || '').split('\n').length)}" placeholder="Auto-generated caption will appear here when hooks are suggested">${escapeHtml(hook.caption || '')}</textarea>
+                        <div class="hook-video-slot" data-video-slot="${index}">
+                            <div class="field" style="margin:0">
+                                <label style="font-size:0.78rem">Clip</label>
+                                <select data-video-select="${index}" style="font-size:0.78rem;padding:3px 6px">
+                                    <option value="">Let the AI pick</option>
+                                </select>
+                            </div>
+                            <span class="clip-info" data-clip-info="${index}"></span>
+                        </div>
                     </div>
                 </div>`).join('')}</div>`;
+
+            // Wire checkboxes
             for (const box of el.hooks.querySelectorAll('[data-index]')) {
+                const index = Number(box.dataset.index);
                 box.addEventListener('change', () => {
-                    // Mutate state and update the count only. Rebuilding the list
-                    // here would detach the very checkbox being clicked.
-                    state.hooks[Number(box.dataset.index)].selected = box.checked;
+                    state.hooks[index].selected = box.checked;
                     refreshCreateButton();
                 });
             }
 
+            // Wire alignment buttons
             for (const group of el.hooks.querySelectorAll('[data-align-for]')) {
-                const hook = state.hooks[Number(group.dataset.alignFor)];
-                const preview = group.parentElement.querySelector('pre');
+                const index = Number(group.dataset.alignFor);
+                const hook = state.hooks[index];
+                const textarea = group.parentElement.querySelector('[data-hook-text]');
                 for (const button of group.querySelectorAll('[data-align]')) {
                     button.addEventListener('click', () => {
-                        // Again: mutate and repaint just this row, never the list.
                         hook.align = button.dataset.align;
-                        preview.style.textAlign = hook.align;
+                        textarea.style.textAlign = hook.align;
                         for (const sibling of group.querySelectorAll('[data-align]')) {
                             sibling.setAttribute('aria-pressed', String(sibling.dataset.align === hook.align));
                         }
                     });
                 }
             }
+
+            // Wire hook text edits
+            for (const ta of el.hooks.querySelectorAll('[data-hook-text]')) {
+                const index = Number(ta.dataset.hookText);
+                ta.addEventListener('input', () => { state.hooks[index].text = ta.value; });
+            }
+
+            // Wire caption edits
+            for (const ta of el.hooks.querySelectorAll('[data-caption-text]')) {
+                const index = Number(ta.dataset.captionText);
+                ta.addEventListener('input', () => { state.hooks[index].caption = ta.value; });
+            }
+
+            // Wire video select
+            for (const sel of el.hooks.querySelectorAll('[data-video-select]')) {
+                const index = Number(sel.dataset.videoSelect);
+                const selectedVideo = state.galleryClips.length > 0
+                    ? state.galleryClips[hashIndex(state.hooks[index].text, state.galleryClips.length)].name
+                    : '';
+                sel.innerHTML = `<option value="">Let the AI pick</option>${state.galleryClips.map((clip) =>
+                    `<option value="${escapeHtml(clip.name)}" ${state.hooks[index].galleryVideo === clip.name ? 'selected' : ''}>${escapeHtml(clip.name)} · ${duration(clip.durationSeconds)}</option>`).join('')}`;
+                sel.addEventListener('change', () => {
+                    state.hooks[index].galleryVideo = sel.value;
+                    updateClipInfo(index);
+                });
+            }
+
+            for (const hook of selectedHooks()) updateClipInfo(state.hooks.indexOf(hook));
+
             refreshCreateButton();
         }
 
-        /** Keeps blank lines between lines — they are deliberate spacing on screen. */
+        function updateClipInfo(index) {
+            const hook = state.hooks[index];
+            if (!hook) return;
+            const infoEl = el.hooks.querySelector(`[data-clip-info="${index}"]`);
+            if (!infoEl) return;
+            if (!hook.galleryVideo) {
+                infoEl.textContent = 'AI will pick the clip';
+                return;
+            }
+            const clip = state.galleryClips.find((c) => c.name === hook.galleryVideo);
+            infoEl.textContent = clip ? escapeHtml(clip.name) : '';
+        }
+
         function normalizeHook(raw) {
             const lines = String(raw).replace(/\r\n?/g, '\n').split('\n').map((line) => line.trim());
             while (lines.length && lines[0] === '') lines.shift();
@@ -198,29 +257,39 @@
             return lines.join('\n');
         }
 
-        function addHook(text, custom = false) {
+        function hashIndex(text, mod) {
+            let hash = 0;
+            for (let i = 0; i < text.length; i++) {
+                hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+            }
+            return ((hash % mod) + mod) % mod;
+        }
+
+        function addHook(text, caption = '', custom = false) {
             const clean = normalizeHook(text);
-            if (!clean || state.hooks.some((hook) => hook.text === clean)) return;
-            const entry = { text: clean, custom, selected: custom, align: 'center' };
+            if (!clean || state.hooks.some((hook) => hook.text === clean && hook.caption === caption)) return;
+            const entry = {
+                text: clean, caption, custom, selected: custom, align: 'left',
+                galleryVideo: '',
+            };
             if (custom) state.hooks.unshift(entry); else state.hooks.push(entry);
         }
 
         async function refreshClips() {
             const gallery = el.gallery.value;
-            state.clips = [];
-            if (state.bookmark?.kind === 'video' && gallery) {
+            state.galleryClips = [];
+            if (gallery) {
                 try {
                     const { items } = await jsonRequest(`/api/gallery/${encodeURIComponent(gallery)}`);
-                    state.clips = items.filter((item) => item.kind === 'video'
-                        && typeof item.durationSeconds === 'number'
-                        && item.durationSeconds >= (state.targetSeconds ?? 0));
-                } catch { state.clips = []; }
+                    state.galleryClips = items.filter((item) => item.kind === 'video'
+                        && typeof item.durationSeconds === 'number');
+                } catch { state.galleryClips = []; }
             }
-            el.clip.innerHTML = `<option value="">Let the AI pick</option>${state.clips.map((clip) =>
-                `<option value="${escapeHtml(clip.name)}">${escapeHtml(clip.name)} · ${duration(clip.durationSeconds)}</option>`).join('')}`;
-            el.clipHelp.textContent = state.clips.length === 0
-                ? `No clip in this gallery is long enough for the ${duration(state.targetSeconds) || 'reference'} template.`
-                : 'Every video in the batch is trimmed from this clip, each at its own offset.';
+            // Re-render hooks to update video selects
+            renderHooks();
+            el.galleryHelp.textContent = state.galleryClips.length === 0
+                ? 'No video clips in this gallery — upload some first.'
+                : `${state.galleryClips.length} clip(s) available.`;
         }
 
         async function init() {
@@ -231,42 +300,27 @@
             const kind = state.bookmark.kind;
             state.targetSeconds = state.bookmark.media?.find((row) => row.role === 'video')?.durationSeconds ?? null;
             el.subtitle.textContent = kind === 'video'
-                ? `Building ${duration(state.targetSeconds)} videos from @${state.bookmark.authorName}'s template.`
-                : `Building slideshows from @${state.bookmark.authorName}'s template.`;
+                ? `Building ${duration(state.targetSeconds)} local drafts from @${state.bookmark.authorName}'s template.`
+                : `Building local drafts from @${state.bookmark.authorName}'s template.`;
 
             [state.galleries, state.devices] = await Promise.all([loadGalleries(), loadDevices()]);
-            el.gallery.innerHTML = galleryOptions(state.galleries, kind);
-            el.galleryHelp.textContent = kind === 'video'
-                ? 'The video is trimmed from one clip in this gallery.'
-                : 'Slides are built from the images in this gallery.';
+            el.gallery.innerHTML = galleryOptions(state.galleries, 'video');
+            el.galleryHelp.textContent = 'The video is trimmed from one clip in this gallery.';
             el.target.innerHTML = deviceOptions(state.devices) || '<option value="">No device accounts configured</option>';
 
-            // A slideshow has no source clip to choose.
-            el.clipField.hidden = kind !== 'video';
             await refreshClips();
             renderHooks();
-
-            // Load the "Create Draft with Video, Caption and Song" workflow ID
-            // Prefer the clone if it exists, otherwise fall back to the original
-            try {
-                const { workflows } = await jsonRequest('/api/workflows');
-                const clone = (workflows ?? []).find((w) => w.name === 'Create Draft (clone)');
-                if (clone) state.workflowId = clone.id;
-                else {
-                    const original = (workflows ?? []).find((w) => w.name === 'Create Draft with Video, Caption and Song');
-                    if (original) state.workflowId = original.id;
-                }
-            } catch { /* workflows may not exist yet */ }
         }
 
         el.gallery.addEventListener('change', () => void refreshClips());
 
+        // Hook suggester
         el.suggest.addEventListener('click', async () => {
             if (state.busy) return;
             state.busy = true;
             el.suggest.disabled = true;
             el.suggest.textContent = 'Writing hooks…';
-            el.hookStatus.innerHTML = '<div class="loading-card"><span class="spinner"></span>Claude is writing hooks…</div>';
+            el.hookStatus.innerHTML = '<div class="loading-card"><span class="spinner"></span>Claude is writing hooks + captions…</div>';
             showError(el.error, null);
             try {
                 const run = await jsonRequest(`/api/bookmarks/${bookmarkId}/hooks`, {
@@ -283,7 +337,7 @@
         function finishSuggest() {
             state.busy = false;
             el.suggest.disabled = false;
-            el.suggest.textContent = state.hooks.length ? 'Suggest 5 more' : 'Suggest 5 hooks';
+            el.suggest.textContent = state.hooks.length ? 'Suggest 5 more' : 'Suggest 5 hooks with captions';
             el.hookStatus.innerHTML = '';
         }
 
@@ -294,7 +348,12 @@
                 return;
             }
             if (run.status === 'failed') showError(el.error, new Error(run.error ?? 'Hook suggestion failed'));
-            for (const hook of run.hooks ?? []) addHook(hook);
+            for (const item of run.hooks ?? []) {
+                // Support both string[] (old format) and Array<{ hook: string; caption: string }> (new format)
+                const hookText = typeof item === 'string' ? item : (item.hook ?? item.text ?? '');
+                const captionText = typeof item === 'string' ? '' : (item.caption ?? '');
+                addHook(hookText, captionText);
+            }
             el.step1.dataset.done = String((run.hooks ?? []).length > 0);
             renderHooks();
             finishSuggest();
@@ -303,140 +362,163 @@
         el.add.addEventListener('click', () => {
             const text = el.custom.value.trim();
             if (!text) return;
-            addHook(text, true);
+            addHook(text, '', true);
             el.custom.value = '';
             renderHooks();
         });
 
+        // Build local drafts
         el.create.addEventListener('click', async () => {
             showError(el.error, null);
             el.create.disabled = true;
             const [deviceUdid, account] = (el.target.value || '').split('|');
             try {
-                const { generations } = await jsonRequest(`/api/bookmarks/${bookmarkId}/generate`, {
+                const hooks = selectedHooks().map((hook) => ({
+                    text: hook.text,
+                    align: hook.align,
+                    caption: hook.caption,
+                    galleryVideo: hook.galleryVideo || undefined,
+                }));
+                const { drafts } = await jsonRequest(`/api/bookmarks/${bookmarkId}/local-drafts`, {
                     method: 'POST',
                     body: JSON.stringify({
-                        gallery: el.gallery.value,
-                        prompt: el.prompt.value,
-                        hooks: selectedHooks().map((hook) => ({ text: hook.text, align: hook.align })),
-                        galleryVideo: el.clip.value || undefined,
+                        hooks,
+                        galleryName: el.gallery.value,
+                        deviceUdid: deviceUdid || undefined,
+                        account: account || undefined,
                         hookRunId: state.hookRunId || undefined,
-                        deviceUdid, account,
                     }),
                 });
-                state.generationIds = generations.map((generation) => generation.id);
-                el.step3.dataset.done = 'true';
+                state.draftIds = drafts.map((d) => d.id);
+                el.step4.dataset.done = 'true';
                 renderBatch();
-                for (const id of state.generationIds) void watch(id);
             } catch (error) {
                 showError(el.error, error);
                 refreshCreateButton();
             }
         });
 
-        const batchState = new Map();
+        const draftState = new Map();
 
         function renderBatch() {
-            el.batch.innerHTML = state.generationIds.map((id) => {
-                const generation = batchState.get(id);
-                return `<article class="batch-card" id="gen-${id}">
+            el.batch.innerHTML = state.draftIds.map((id) => {
+                const draft = draftState.get(id);
+                const previewUrl = draft
+                    ? `/api/gallery/${encodeURIComponent(draft.galleryName)}/media/${encodeURIComponent(draft.galleryVideo)}#t=${draft.trimStartSeconds ?? 0}${draft.trimEndSeconds ? `,${draft.trimEndSeconds}` : ''}`
+                    : '';
+                return `<article class="batch-card" id="draft-${id}">
                     <header>
-                        <span class="hook">${escapeHtml(generation?.hook?.split('\n')[0] ?? 'Queued')}</span>
-                        <span class="status ${escapeHtml(generation?.status ?? 'pending')}">${escapeHtml(generation?.status ?? 'pending')}</span>
+                        <span class="hook">${escapeHtml(draft?.hook?.split('\n')[0] ?? 'Queued')}</span>
+                        <span class="status ${escapeHtml(draft?.status ?? 'draft')}">${escapeHtml(draft?.status ?? 'draft')}</span>
                     </header>
-                    <div class="body"></div>
+                    <div class="body">
+                        ${previewUrl ? `<video src="${previewUrl}" controls playsinline preload="metadata"></video>` : '<p class="clip-info">Loading preview…</p>'}
+                        <p class="meta">${draft ? `${escapeHtml(draft.galleryVideo)} · ${duration(draft.durationSeconds ?? 0)}` : ''}</p>
+                    </div>
                 </article>`;
             }).join('');
-            for (const id of state.generationIds) {
-                const generation = batchState.get(id);
-                if (generation) renderGeneration(generation, el.batch.querySelector(`#gen-${CSS.escape(id)} .body`));
+            for (const id of state.draftIds) {
+                const draft = draftState.get(id);
+                if (draft) renderDraft(draft, el.batch.querySelector(`#draft-${CSS.escape(id)} .body`));
+                else void loadDraft(id);
             }
         }
 
-        function renderGeneration(generation, host) {
+        async function loadDraft(id) {
+            try {
+                const draft = await jsonRequest(`/api/local-drafts/${id}`);
+                draftState.set(id, draft);
+                const card = el.batch.querySelector(`#draft-${CSS.escape(id)}`);
+                if (card) renderDraft(draft, card.querySelector('.body'));
+            } catch { /* draft may have been deleted */ }
+        }
+
+        function renderDraft(draft, host) {
             if (!host) return;
-            if (generation.status === 'pending' || generation.status === 'generating') {
-                host.innerHTML = '<div class="loading-card"><span class="spinner"></span>Building…</div>';
-                return;
-            }
-            if (generation.status === 'failed') {
-                host.innerHTML = `<p class="status error">${escapeHtml(generation.error || 'Generation failed')}</p>`;
-                return;
-            }
-            const media = generation.video
-                ? `<figure><video src="/api/generations/${generation.id}/slides/${generation.video}" controls playsinline preload="metadata"></video></figure>`
-                : (generation.slides ?? []).map((name) =>
-                    `<figure><img src="/api/generations/${generation.id}/slides/${name}" alt="${escapeHtml(name)}" loading="lazy"></figure>`).join('');
-            const queued = generation.status === 'queued';
+            const previewUrl = `/api/gallery/${encodeURIComponent(draft.galleryName)}/media/${encodeURIComponent(draft.galleryVideo)}#t=${draft.trimStartSeconds ?? 0}${draft.trimEndSeconds ? `,${draft.trimEndSeconds}` : ''}`;
+            const queued = draft.status === 'queued';
             host.innerHTML = `
-                <div class="slide-grid">${media}</div>
+                <video src="${previewUrl}" controls playsinline preload="metadata"></video>
+                <p class="meta">${escapeHtml(draft.galleryVideo)} · ${duration(draft.durationSeconds ?? 0)}</p>
+                <div class="field wide">
+                    <label>Hook</label>
+                    <textarea class="caption-box" data-field="hook" ${queued ? 'disabled' : ''} rows="${Math.max(2, (draft.hook || '').split('\n').length)}">${escapeHtml(draft.hook || '')}</textarea>
+                </div>
                 <div class="field wide">
                     <label>Caption</label>
-                    <textarea class="caption-box" data-caption ${queued ? 'disabled' : ''}>${escapeHtml(generation.caption || '')}</textarea>
+                    <textarea class="caption-box" data-field="caption" ${queued ? 'disabled' : ''}>${escapeHtml(draft.caption || '')}</textarea>
                     <p class="field-help">First line becomes the TikTok title; leave a blank line before the body.</p>
                 </div>
                 <div class="form-actions">
-                    <button class="button secondary" type="button" data-save ${queued ? 'disabled' : ''}>Save caption</button>
-                    <button class="button secondary" type="button" data-download>${generation.video ? 'Download video' : `Download ${(generation.slides ?? []).length} slides`}</button>
-                    <button class="button primary" type="button" data-queue ${queued ? 'disabled' : ''}>${queued ? 'Queued as draft' : 'Queue draft to device'}</button>
+                    <button class="button secondary" type="button" data-save ${queued ? 'disabled' : ''}>Save to DB</button>
+                    <button class="button secondary" type="button" data-download ${queued ? 'disabled' : ''}>Download video</button>
+                    <button class="button primary" type="button" data-queue ${queued ? 'disabled' : ''}>${queued ? 'Queued' : 'Queue via workflow'}</button>
                 </div>
                 <p class="status error" data-error hidden></p>`;
 
             const errorNode = host.querySelector('[data-error]');
-            const caption = () => host.querySelector('[data-caption]').value;
+            const field = (name) => host.querySelector(`[data-field="${name}"]`)?.value ?? '';
 
-            host.querySelector('[data-download]')?.addEventListener('click', () => {
-                // ?download makes the server send Content-Disposition: attachment,
-                // so a video is saved rather than opened in the player.
-                const files = generation.video ? [generation.video] : (generation.slides ?? []);
-                for (const [index, file] of files.entries()) {
-                    const link = document.createElement('a');
-                    link.href = `/api/generations/${generation.id}/slides/${encodeURIComponent(file)}?download=1`;
-                    link.download = '';
-                    document.body.append(link);
-                    // Stagger slightly: browsers drop simultaneous downloads.
-                    setTimeout(() => { link.click(); link.remove(); }, index * 250);
-                }
-            });
             host.querySelector('[data-save]')?.addEventListener('click', async () => {
                 showError(errorNode, null);
                 try {
-                    await jsonRequest(`/api/generations/${generation.id}`, { method: 'PATCH', body: JSON.stringify({ caption: caption() }) });
+                    await jsonRequest(`/api/local-drafts/${draft.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ hook: field('hook'), caption: field('caption') }),
+                    });
+                    draft.hook = field('hook');
+                    draft.caption = field('caption');
+                    showError(errorNode, null);
                 } catch (error) { showError(errorNode, error); }
             });
+
+            host.querySelector('[data-download]')?.addEventListener('click', async () => {
+                showError(errorNode, null);
+                try {
+                    // Save hook/caption first
+                    await jsonRequest(`/api/local-drafts/${draft.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ hook: field('hook'), caption: field('caption') }),
+                    });
+                    // Trigger download
+                    const response = await fetch(`/api/local-drafts/${draft.id}/download`, { method: 'POST' });
+                    if (!response.ok) {
+                        const err = await response.json().catch(() => ({}));
+                        throw new Error(err.error ?? `Download failed (${response.status})`);
+                    }
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `draft-${draft.id.slice(0, 8)}.mp4`;
+                    document.body.append(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                } catch (error) { showError(errorNode, error); }
+            });
+
             host.querySelector('[data-queue]')?.addEventListener('click', async () => {
                 showError(errorNode, null);
                 try {
-                    await jsonRequest(`/api/generations/${generation.id}`, { method: 'PATCH', body: JSON.stringify({ caption: caption() }) });
-                    if (state.workflowId) {
-                        // Use the workflow-based approach: import media to device + run workflow
-                        await jsonRequest(`/api/generations/${generation.id}/queue-via-workflow`, {
-                            method: 'POST', body: JSON.stringify({
-                                workflowId: state.workflowId,
-                                caption: caption(),
-                            }),
-                        });
-                    } else {
-                        // Fallback: old post task system
-                        await jsonRequest(`/api/generations/${generation.id}/queue`, { method: 'POST', body: JSON.stringify({}) });
-                    }
-                    void watch(generation.id);
+                    // Save hook/caption first
+                    await jsonRequest(`/api/local-drafts/${draft.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ hook: field('hook'), caption: field('caption') }),
+                    });
+                    // Load workflow ID from existing workflows
+                    const { workflows } = await jsonRequest('/api/workflows');
+                    const wf = (workflows ?? []).find((w) => w.name === 'Create Draft (clone)')
+                        ?? (workflows ?? []).find((w) => w.name === 'Create Draft with Video, Caption and Song');
+                    if (!wf) throw new Error('No suitable workflow found — create a "Create Draft (clone)" workflow first');
+
+                    await jsonRequest(`/api/local-drafts/${draft.id}/queue-via-workflow`, {
+                        method: 'POST', body: JSON.stringify({ workflowId: wf.id }),
+                    });
+                    await loadDraft(draft.id);
                 } catch (error) { showError(errorNode, error); }
             });
         }
-
-        async function watch(id) {
-            try {
-                const generation = await jsonRequest(`/api/generations/${id}`);
-                batchState.set(id, generation);
-                renderBatch();
-                if (generation.status === 'pending' || generation.status === 'generating') setTimeout(() => void watch(id), 4000);
-            } catch { /* the bookmark may have been deleted; stop quietly */ }
-        }
-
-        // Deep link from the template page straight to one generation.
-        const existing = param('generation');
-        if (existing) { state.generationIds = [existing]; void watch(existing); }
 
         void init();
     </script>

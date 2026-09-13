@@ -21,24 +21,41 @@ export interface HookDependencies {
  * Validates the hooks.json the model writes. Same posture as validatePlan: the
  * model's output is untrusted, so shape and limits are re-checked here before
  * anything reaches a generation.
+ *
+ * The model can return either:
+ * - `["hook1", "hook2"]` (legacy string[] format)
+ * - `[{ "hook": "hook1", "caption": "caption1" }, ...]` (new object format)
  */
-export function validateHooks(raw: unknown): string[] {
+export function validateHooks(raw: unknown): Array<string | { hook: string; caption: string }> {
     const list = Array.isArray(raw) ? raw : (raw as { hooks?: unknown })?.hooks;
     if (!Array.isArray(list)) throw new PlanValidationError('hooks.json must hold a "hooks" array');
 
-    const hooks: string[] = [];
+    const result: Array<string | { hook: string; caption: string }> = [];
     for (const [index, entry] of list.entries()) {
-        if (typeof entry !== 'string') throw new PlanValidationError(`hooks[${index}] must be a string`);
-        const hook = normalizeHook(entry);
-        if (!hook) continue;
-        assertHook(hook, `hooks[${index}]`);
-        // The picker is a list of choices; duplicates waste a slot.
-        if (!hooks.includes(hook)) hooks.push(hook);
+        if (typeof entry === 'string') {
+            const hook = normalizeHook(entry);
+            if (!hook) continue;
+            assertHook(hook, `hooks[${index}]`);
+            if (!result.some((r) => typeof r === 'string' ? r === hook : r.hook === hook)) {
+                result.push(hook);
+            }
+        } else if (typeof entry === 'object' && entry !== null) {
+            const obj = entry as Record<string, unknown>;
+            const hookText = typeof obj.hook === 'string' ? normalizeHook(obj.hook) : '';
+            if (!hookText) continue;
+            assertHook(hookText, `hooks[${index}].hook`);
+            const caption = typeof obj.caption === 'string' ? obj.caption : '';
+            if (!result.some((r) => typeof r === 'string' ? r === hookText : r.hook === hookText)) {
+                result.push({ hook: hookText, caption });
+            }
+        } else {
+            throw new PlanValidationError(`hooks[${index}] must be a string or { hook, caption } object`);
+        }
     }
 
-    if (hooks.length === 0) throw new PlanValidationError('hooks.json produced no usable hooks');
-    if (hooks.length > MAX_HOOKS) throw new PlanValidationError(`hooks.json must hold at most ${MAX_HOOKS} hooks`);
-    return hooks;
+    if (result.length === 0) throw new PlanValidationError('hooks.json produced no usable hooks');
+    if (result.length > MAX_HOOKS) throw new PlanValidationError(`hooks.json must hold at most ${MAX_HOOKS} hooks`);
+    return result;
 }
 
 export function buildHookPrompt(input: ReferenceInput & { kind: 'slideshow' | 'video'; count: number }): string {
@@ -46,7 +63,7 @@ export function buildHookPrompt(input: ReferenceInput & { kind: 'slideshow' | 'v
         ? 'burned over the video as large white text with a black outline, TikTok style'
         : 'set as the opening slide of a slideshow';
     return [
-        `You are writing ${input.count} alternative hooks for a TikTok post that reuses the`,
+        `You are writing ${input.count} pairs of hooks and captions for a TikTok post that reuses the`,
         'structure of a reference post.',
         '',
         ...referenceBlock(input),
@@ -55,15 +72,20 @@ export function buildHookPrompt(input: ReferenceInput & { kind: 'slideshow' | 'v
         'A hook may span several lines, and a blank line between lines is allowed when',
         'the pause helps it land — for example a question, a blank line, then the punchline.',
         '',
+        'You also write a matching caption for each hook. The caption is the post text',
+        'that goes in the bio area. The first line should grab attention (like the hook),',
+        'then a blank line, then the body copy. Keep captions to 2-5 lines.',
+        '',
         'Your job:',
         `1. Look at the reference material in ./bookmark to see what the post is doing.`,
-        `2. Write ${input.count} DIFFERENT hooks that could open a post in the same style.`,
+        `2. Write ${input.count} DIFFERENT hook/caption pairs that could open a post in the same style.`,
         '   Vary the angle — do not write five rewordings of one sentence.',
         '   They are for the operator\'s own product, not the reference\'s.',
         '',
         'Then write exactly one file, hooks.json, at the workspace root:',
         '',
-        '{ "hooks": ["first hook", "second hook"] }',
+        '[{ "hook": "first hook", "caption": "caption for first hook" },',
+        ' { "hook": "second hook", "caption": "caption for second hook" }]',
         '',
         'Write hooks.json and nothing else. Do not modify any other file.',
     ].join('\n');
@@ -117,10 +139,10 @@ export async function suggestHooks(
         });
         await writeFile(path.join(workspace, 'PROMPT.txt'), prompt);
 
-        log(`Asking Claude for ${HOOK_SUGGESTION_COUNT} hooks`);
+        log(`Asking Claude for ${HOOK_SUGGESTION_COUNT} hook/caption pairs`);
         await runModel({ prompt, workspace, signal, log });
 
-        let hooks: string[];
+        let hooks: Array<string | { hook: string; caption: string }>;
         try {
             hooks = validateHooks(JSON.parse(await readFile(path.join(workspace, 'hooks.json'), 'utf8')));
         } catch (error) {
@@ -128,7 +150,7 @@ export async function suggestHooks(
         }
 
         await repository.updateHookRun(hookRunId, { status: 'ready', hooks, finishedAt: new Date(), error: null });
-        log(`Suggested ${hooks.length} hook(s)`);
+        log(`Suggested ${hooks.length} hook/caption pair(s)`);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         log(`Failed: ${message}`);

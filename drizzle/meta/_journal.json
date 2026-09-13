@@ -92,6 +92,13 @@
       "when": 1789333420000,
       "tag": "0012_import_video_step",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789512340000,
+      "tag": "0013_local_drafts",
+      "breakpoints": true
     }
   ]
 }

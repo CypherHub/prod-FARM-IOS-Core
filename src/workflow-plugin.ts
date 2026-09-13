@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { eq, asc, and, desc, count } from 'drizzle-orm';
 import { remote, type Browser } from 'webdriverio';
 
-import { workflows, workflowSteps, generations, workflowRuns } from './database/schema.js';
+import { workflows, workflowSteps, generations, workflowRuns, localDrafts, bookmarks } from './database/schema.js';
 import { screenshotToJpeg } from './tiktok/vision-guide.js';
 import { tiktokAppiumCapabilities } from './tiktok/appium-session.js';
 import type { PhoneFarmPlugin, PluginRouteContext } from './plugin.js';
@@ -914,6 +914,305 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     finishedAt: run.finishedAt?.toISOString?.() ?? run.finishedAt,
                     workflowName: wf?.name ?? 'Unknown',
                 };
+            });
+
+            // --- Local Drafts (lightweight video drafts, no ffmpeg until download/queue) ---
+
+            app.post<{
+                Params: { id: string };
+                Body: {
+                    hooks: Array<{ text: string; align?: string; caption?: string; galleryVideo?: string; trimStartSeconds?: number; trimEndSeconds?: number | null }>;
+                    galleryName: string;
+                    deviceUdid?: string;
+                    account?: string;
+                    hookRunId?: string;
+                };
+            }>('/api/bookmarks/:id/local-drafts', async (request, reply) => {
+                const { id } = request.params;
+                const { hooks, galleryName, deviceUdid, account, hookRunId } = request.body;
+                if (!hooks?.length) return reply.code(400).send({ error: 'At least one hook is required' });
+                if (!galleryName) return reply.code(400).send({ error: 'galleryName is required' });
+
+                const [bookmark] = await db.select({ id: bookmarks.id }).from(bookmarks).where(eq(bookmarks.id, id));
+                if (!bookmark) return reply.code(404).send({ error: 'Bookmark not found' });
+
+                // Get gallery clips and their durations for auto-assignment
+                const { listGalleryItems } = await import('./content/gallery.js');
+                const allItems = await listGalleryItems(galleryName);
+                const clips = allItems
+                    .filter((item) => item.kind === 'video' && typeof item.durationSeconds === 'number' && item.durationSeconds >= 2)
+                    .map((item) => ({ name: item.name, durationSeconds: item.durationSeconds as number }));
+
+                if (clips.length === 0) {
+                    return reply.code(400).send({ error: 'Gallery has no usable video clips (each must be at least 2 seconds)' });
+                }
+
+                const created = [];
+                const usedRanges: Array<{ start: number; end: number }> = [];
+
+                for (const hook of hooks) {
+                    // 1. Pick a clip — use the one the user chose, or a random one that's not overly reused
+                    let clip: { name: string; durationSeconds: number };
+                    if (hook.galleryVideo && clips.find((c) => c.name === hook.galleryVideo)) {
+                        clip = clips.find((c) => c.name === hook.galleryVideo)!;
+                    } else {
+                        clip = clips[Math.floor(Math.random() * clips.length)];
+                    }
+
+                    // 2. Auto-assign unique trim times for this draft
+                    //    Use the hook text as a seed so same hook gets same trim, but cycles through available ranges
+                    let trimStart = 0;
+                    const minDuration = Math.min(5, clip.durationSeconds - 1);
+                    const maxDuration = Math.min(15, clip.durationSeconds);
+
+                    // Try to find a non-overlapping unique range
+                    let attempts = 0;
+                    let trimEnd: number | null = null;
+                    while (attempts < 30) {
+                        const startCandidate = Math.max(0, Math.floor(Math.random() * (clip.durationSeconds - minDuration)));
+                        const maxEnd = Math.min(clip.durationSeconds, startCandidate + maxDuration);
+                        const duration = minDuration + Math.random() * (maxEnd - startCandidate - minDuration);
+                        const endCandidate = Math.min(clip.durationSeconds, startCandidate + duration);
+
+                        // Check overlap with existing used ranges
+                        const overlaps = usedRanges.some((r) =>
+                            !(endCandidate <= r.start + 0.5 || startCandidate >= r.end - 0.5)
+                        );
+
+                        if (!overlaps || attempts >= 20) {
+                            trimStart = startCandidate;
+                            trimEnd = Math.round(endCandidate * 10) / 10;
+                            usedRanges.push({ start: trimStart, end: trimEnd });
+                            break;
+                        }
+                        attempts++;
+                    }
+
+                    const durationSeconds = trimEnd != null ? Math.round((trimEnd - trimStart) * 10) / 10 : null;
+
+                    const [row] = await db.insert(localDrafts).values({
+                        bookmarkId: id,
+                        hookRunId: hookRunId ?? null,
+                        galleryName,
+                        galleryVideo: clip.name,
+                        trimStartSeconds: trimStart,
+                        trimEndSeconds: trimEnd,
+                        durationSeconds: durationSeconds != null && durationSeconds > 0 ? durationSeconds : null,
+                        hook: hook.text,
+                        hookAlign: (hook.align as 'left' | 'center' | 'right') ?? 'left',
+                        caption: hook.caption ?? '',
+                        deviceUdid: deviceUdid ?? null,
+                        account: account ?? null,
+                    }).returning();
+                    if (row) created.push(row);
+                }
+                return reply.code(201).send({ drafts: created });
+            });
+
+            app.get<{ Params: { id: string } }>('/api/bookmarks/:id/local-drafts', async (request, reply) => {
+                const rows = await db.select().from(localDrafts)
+                    .where(eq(localDrafts.bookmarkId, request.params.id))
+                    .orderBy(desc(localDrafts.createdAt));
+                return { drafts: rows };
+            });
+
+            app.get<{ Params: { id: string } }>('/api/local-drafts/:id', async (request, reply) => {
+                const [row] = await db.select().from(localDrafts).where(eq(localDrafts.id, request.params.id));
+                if (!row) return reply.code(404).send({ error: 'Local draft not found' });
+                return row;
+            });
+
+            app.patch<{
+                Params: { id: string };
+                Body: {
+                    hook?: string;
+                    hookAlign?: string;
+                    caption?: string;
+                    galleryVideo?: string;
+                    trimStartSeconds?: number;
+                    trimEndSeconds?: number | null;
+                    deviceUdid?: string;
+                    account?: string;
+                    status?: string;
+                };
+            }>('/api/local-drafts/:id', async (request, reply) => {
+                const updates: Record<string, unknown> = {};
+                if (request.body.hook !== undefined) updates.hook = request.body.hook;
+                if (request.body.hookAlign !== undefined) updates.hookAlign = request.body.hookAlign;
+                if (request.body.caption !== undefined) updates.caption = request.body.caption;
+                if (request.body.galleryVideo !== undefined) updates.galleryVideo = request.body.galleryVideo;
+                if (request.body.trimStartSeconds !== undefined) updates.trimStartSeconds = request.body.trimStartSeconds;
+                if (request.body.trimEndSeconds !== undefined) updates.trimEndSeconds = request.body.trimEndSeconds ?? null;
+                if (request.body.deviceUdid !== undefined) updates.deviceUdid = request.body.deviceUdid ?? null;
+                if (request.body.account !== undefined) updates.account = request.body.account ?? null;
+                if (request.body.status !== undefined) updates.status = request.body.status;
+                updates.updatedAt = new Date();
+
+                // Recalculate duration if trim changed
+                if (request.body.trimStartSeconds !== undefined || request.body.trimEndSeconds !== undefined) {
+                    const [current] = await db.select({
+                        trimStartSeconds: localDrafts.trimStartSeconds,
+                        trimEndSeconds: localDrafts.trimEndSeconds,
+                    }).from(localDrafts).where(eq(localDrafts.id, request.params.id));
+                    if (current) {
+                        const start = request.body.trimStartSeconds ?? current.trimStartSeconds;
+                        const end = request.body.trimEndSeconds !== undefined ? request.body.trimEndSeconds : current.trimEndSeconds;
+                        if (end != null) {
+                            const duration = end - start;
+                            updates.durationSeconds = duration > 0 ? duration : null;
+                        } else {
+                            updates.durationSeconds = null;
+                        }
+                    }
+                }
+
+                const [row] = await db.update(localDrafts).set(updates)
+                    .where(eq(localDrafts.id, request.params.id)).returning();
+                if (!row) return reply.code(404).send({ error: 'Local draft not found' });
+                return row;
+            });
+
+            app.delete<{ Params: { id: string } }>('/api/local-drafts/:id', async (request, reply) => {
+                await db.delete(localDrafts).where(eq(localDrafts.id, request.params.id));
+                return reply.code(204).send();
+            });
+
+            // Download a local draft — renders the actual video via ffmpeg
+            app.post<{ Params: { id: string } }>('/api/local-drafts/:id/download', async (request, reply) => {
+                const [draft] = await db.select().from(localDrafts).where(eq(localDrafts.id, request.params.id));
+                if (!draft) return reply.code(404).send({ error: 'Local draft not found' });
+                if (!draft.galleryVideo) return reply.code(400).send({ error: 'Draft has no gallery video assigned' });
+
+                try {
+                    const { resolveGalleryFile } = await import('./content/gallery.js');
+                    const { compositeVideo } = await import('./content/composite.js');
+                    const { mkdtemp, readFile } = await import('node:fs/promises');
+                    const pathModule = await import('node:path');
+                    const os = await import('node:os');
+
+                    const clipPath = resolveGalleryFile(draft.galleryName, draft.galleryVideo);
+                    const outputDir = await mkdtemp(pathModule.join(os.tmpdir(), 'draft-render-'));
+                    const outputPath = pathModule.join(outputDir, 'post.mp4');
+
+                    const trimEnd = draft.trimEndSeconds ?? undefined;
+                    const duration = trimEnd != null
+                        ? trimEnd - draft.trimStartSeconds
+                        : undefined;
+
+                    await compositeVideo({
+                        clipPath,
+                        trimStartSeconds: draft.trimStartSeconds,
+                        durationSeconds: duration ?? 5, // default 5s if no duration set
+                        hook: draft.hook,
+                        hookAlign: draft.hookAlign as 'left' | 'center' | 'right',
+                        outputPath,
+                    });
+
+                    const videoBuffer = await readFile(outputPath);
+                    await import('node:fs/promises').then((f) => f.rm(outputDir, { recursive: true, force: true }));
+
+                    return reply
+                        .type('video/mp4')
+                        .header('content-disposition', `attachment; filename="draft-${draft.id.slice(0, 8)}.mp4"`)
+                        .send(videoBuffer);
+                } catch (error) {
+                    return reply.code(500).send({ error: error instanceof Error ? error.message : String(error) });
+                }
+            });
+
+            // Queue a local draft via workflow
+            app.post<{ Params: { id: string }; Body: { workflowId: string } }>('/api/local-drafts/:id/queue-via-workflow', async (request, reply) => {
+                const [draft] = await db.select().from(localDrafts).where(eq(localDrafts.id, request.params.id));
+                if (!draft) return reply.code(404).send({ error: 'Local draft not found' });
+                const { workflowId } = request.body;
+                if (!workflowId) return reply.code(400).send({ error: 'workflowId is required' });
+
+                const [wf] = await db.select().from(workflows).where(eq(workflows.id, workflowId));
+                if (!wf) return reply.code(404).send({ error: 'Workflow not found' });
+
+                const udid = draft.deviceUdid ?? wf.deviceUdid;
+                if (!udid) return reply.code(400).send({ error: 'No device assigned to this draft or workflow' });
+
+                // Resolve gallery video file path
+                const { resolveGalleryFile } = await import('./content/gallery.js');
+                const clipPath = resolveGalleryFile(draft.galleryName, draft.galleryVideo);
+
+                // Patch the import_video step with the video path
+                const importVideoSteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
+                    .from(workflowSteps)
+                    .where(
+                        and(
+                            eq(workflowSteps.workflowId, workflowId),
+                            eq(workflowSteps.stepType, 'import_video'),
+                        )
+                    )
+                    .orderBy(asc(workflowSteps.stepOrder));
+                if (importVideoSteps.length === 0) {
+                    return reply.code(409).send({ error: 'Workflow has no import_video step; cannot queue' });
+                }
+                await db.update(workflowSteps).set({ text: clipPath })
+                    .where(eq(workflowSteps.id, importVideoSteps[0]!.id));
+
+                // Patch caption into the first type_keys step
+                if (draft.caption?.trim()) {
+                    const typeKeySteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
+                        .from(workflowSteps)
+                        .where(
+                            and(
+                                eq(workflowSteps.workflowId, workflowId),
+                                eq(workflowSteps.stepType, 'type_keys'),
+                            )
+                        )
+                        .orderBy(asc(workflowSteps.stepOrder));
+                    if (typeKeySteps.length > 0) {
+                        let captionText = draft.caption.trim();
+                        const words = captionText.split(/\s+/);
+                        const lastWord = words[words.length - 1];
+                        if (lastWord && lastWord.startsWith('#')) captionText += ' fyp';
+                        await db.update(workflowSteps).set({ text: captionText })
+                            .where(eq(workflowSteps.id, typeKeySteps[0]!.id));
+                    }
+                }
+
+                // Ensure workflow has the device UDID
+                if (!wf.deviceUdid || wf.deviceUdid !== udid) {
+                    await db.update(workflows).set({ deviceUdid: udid, updatedAt: new Date() })
+                        .where(eq(workflows.id, workflowId));
+                }
+
+                // Update draft status
+                await db.update(localDrafts).set({ status: 'queued', updatedAt: new Date() })
+                    .where(eq(localDrafts.id, draft.id));
+
+                // Run the workflow
+                const steps = await db.select().from(workflowSteps)
+                    .where(eq(workflowSteps.workflowId, workflowId))
+                    .orderBy(asc(workflowSteps.stepOrder));
+                if (steps.length === 0) return reply.code(409).send({ error: 'Workflow has no steps' });
+
+                const runId = startReplayEntry(workflowId, wf.name, udid, steps.length, db);
+                const abortController = new AbortController();
+                runSteps(context.remote, udid, steps, abortController.signal, runId, db)
+                    .catch(() => finishReplay(runId, 'failed', 'Unexpected error during replay', db));
+
+                await db.update(localDrafts).set({ status: 'queued', updatedAt: new Date() })
+                    .where(eq(localDrafts.id, draft.id));
+
+                return reply.code(202).send({
+                    ok: true,
+                    message: 'Local draft queued via workflow',
+                    runId,
+                    status: 'running',
+                    totalSteps: steps.length,
+                });
+            });
+
+            // Save a local draft (mark as saved)
+            app.post<{ Params: { id: string } }>('/api/local-drafts/:id/save', async (request, reply) => {
+                const [row] = await db.update(localDrafts).set({ status: 'saved', updatedAt: new Date() })
+                    .where(eq(localDrafts.id, request.params.id)).returning();
+                if (!row) return reply.code(404).send({ error: 'Local draft not found' });
+                return row;
             });
 
             // --- Page routes are registered in main app ---

@@ -246,3 +246,20 @@ export async function compositeVideo(options: {
         clipPath, trimStartSeconds, durationSeconds, overlayPng, outputPath,
     }));
 }
+
+/**
+ * Renders a video from local draft parameters — trims the gallery clip,
+ * letterboxes it to 1080×1920, and burns the hook text overlay.
+ * This is used by the download endpoint for local drafts.
+ */
+export async function renderVideoFromDraft(options: {
+    clipPath: string;
+    trimStartSeconds: number;
+    durationSeconds: number;
+    hook: string;
+    hookAlign?: HookAlign;
+    outputPath: string;
+}): Promise<void> {
+    // Delegates to the same compositeVideo logic
+    return compositeVideo(options);
+}

@@ -117,7 +117,7 @@ export const hookRuns = schedulerSchema.table('hook_runs', {
     id: uuid('id').primaryKey().defaultRandom(),
     bookmarkId: uuid('bookmark_id').notNull().references(() => bookmarks.id, { onDelete: 'cascade' }),
     status: hookRunStatus('status').notNull().default('pending'),
-    prompt: text('prompt'), hooks: jsonb('hooks').$type<string[]>(), error: text('error'),
+    prompt: text('prompt'), hooks: jsonb('hooks').$type<Array<string | { hook: string; caption: string }>>(), error: text('error'),
     finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'date' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
@@ -215,6 +215,30 @@ export const workflowSteps = schedulerSchema.table('workflow_steps', {
     index('workflow_steps_workflow_idx').on(table.workflowId, table.stepOrder),
 ]);
 
+export const localDraftStatus = schedulerSchema.enum('local_draft_status', ['draft', 'saved', 'queued']);
+
+/** A lightweight draft — metadata referencing a gallery clip with trim info, no video processing. */
+export const localDrafts = schedulerSchema.table('local_drafts', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    bookmarkId: uuid('bookmark_id').notNull().references(() => bookmarks.id, { onDelete: 'cascade' }),
+    hookRunId: uuid('hook_run_id').references(() => hookRuns.id, { onDelete: 'set null' }),
+    galleryName: text('gallery_name').notNull(),
+    galleryVideo: text('gallery_video').notNull(),
+    trimStartSeconds: real('trim_start_seconds').notNull().default(0),
+    trimEndSeconds: real('trim_end_seconds'),
+    durationSeconds: real('duration_seconds'),
+    hook: text('hook').notNull(),
+    hookAlign: hookAlign('hook_align').notNull().default('left'),
+    caption: text('caption').notNull().default(''),
+    deviceUdid: text('device_udid'),
+    account: text('account'),
+    status: localDraftStatus('status').notNull().default('draft'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+    index('local_drafts_bookmark_idx').on(table.bookmarkId, table.createdAt),
+]);
+
 export type ScheduleRow = typeof schedules.$inferSelect;
 export type ExecutionRow = typeof executions.$inferSelect;
 export type WorkflowRow = typeof workflows.$inferSelect;
@@ -223,3 +247,4 @@ export type BookmarkRow = typeof bookmarks.$inferSelect;
 export type BookmarkMediaRow = typeof bookmarkMedia.$inferSelect;
 export type GenerationRow = typeof generations.$inferSelect;
 export type HookRunRow = typeof hookRuns.$inferSelect;
+export type LocalDraftRow = typeof localDrafts.$inferSelect;

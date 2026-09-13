@@ -4,8 +4,8 @@ import type { PgBoss } from 'pg-boss';
 
 import type { DatabaseConnection } from '../database/client.js';
 import {
-    bookmarkMedia, bookmarks, generations, hookRuns,
-    type BookmarkMediaRow, type BookmarkRow, type GenerationRow, type HookRunRow,
+    bookmarkMedia, bookmarks, generations, hookRuns, localDrafts,
+    type BookmarkMediaRow, type BookmarkRow, type GenerationRow, type HookRunRow, type LocalDraftRow,
 } from '../database/schema.js';
 import {
     CONTENT_GENERATE_QUEUE, CONTENT_HOOKS_QUEUE, CONTENT_INGEST_QUEUE, ensureContentQueue,
@@ -197,5 +197,68 @@ export class ContentRepository {
 
     async savePlan(id: string, plan: JsonObject, caption: string, outputDir: string, hook: string): Promise<GenerationRow> {
         return this.updateGeneration(id, { plan, caption, hook, outputDir, status: 'ready', finishedAt: new Date(), error: null });
+    }
+
+    // ── Local Drafts ──
+
+    async createLocalDraft(input: {
+        bookmarkId: string;
+        hookRunId?: string | null;
+        galleryName: string;
+        galleryVideo: string;
+        trimStartSeconds?: number;
+        trimEndSeconds?: number | null;
+        hook: string;
+        hookAlign?: 'left' | 'center' | 'right';
+        caption?: string;
+        deviceUdid?: string | null;
+        account?: string | null;
+    }): Promise<LocalDraftRow> {
+        const bookmark = await this.bookmark(input.bookmarkId);
+        if (!bookmark) throw new ContentStateError('Bookmark not found');
+        const duration = input.trimEndSeconds != null
+            ? input.trimEndSeconds - (input.trimStartSeconds ?? 0)
+            : null;
+        const [row] = await this.connection.db.insert(localDrafts).values({
+            bookmarkId: input.bookmarkId,
+            hookRunId: input.hookRunId ?? null,
+            galleryName: input.galleryName,
+            galleryVideo: input.galleryVideo,
+            trimStartSeconds: input.trimStartSeconds ?? 0,
+            trimEndSeconds: input.trimEndSeconds ?? null,
+            durationSeconds: duration != null && duration > 0 ? duration : null,
+            hook: input.hook,
+            hookAlign: input.hookAlign ?? 'left',
+            caption: input.caption ?? '',
+            deviceUdid: input.deviceUdid ?? null,
+            account: input.account ?? null,
+        }).returning();
+        if (!row) throw new Error('Unable to create local draft');
+        return row;
+    }
+
+    async localDraft(id: string): Promise<LocalDraftRow | null> {
+        const [row] = await this.connection.db.select().from(localDrafts).where(eq(localDrafts.id, id)).limit(1);
+        return row ?? null;
+    }
+
+    async listLocalDrafts(bookmarkId?: string, limit = 100): Promise<LocalDraftRow[]> {
+        const query = this.connection.db.select().from(localDrafts);
+        if (bookmarkId) {
+            return query.where(eq(localDrafts.bookmarkId, bookmarkId))
+                .orderBy(desc(localDrafts.createdAt)).limit(limit);
+        }
+        return query.orderBy(desc(localDrafts.createdAt)).limit(limit);
+    }
+
+    async updateLocalDraft(id: string, values: Partial<typeof localDrafts.$inferInsert>): Promise<LocalDraftRow> {
+        const [row] = await this.connection.db.update(localDrafts)
+            .set({ ...values, updatedAt: new Date() }).where(eq(localDrafts.id, id)).returning();
+        if (!row) throw new ContentStateError(`Local draft ${id} no longer exists`);
+        return row;
+    }
+
+    async deleteLocalDraft(id: string): Promise<void> {
+        await this.connection.db.delete(localDrafts).where(eq(localDrafts.id, id));
     }
 }
