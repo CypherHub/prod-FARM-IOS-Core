@@ -183,6 +183,11 @@ export class FarmSupervisor {
     private onExit(name: string, id: number, startedAt: number, detail: string): void {
         if (this.stopping || this.generation.get(name) !== id) return;
         const livedMs = Math.max(0, this.now() - startedAt);
+        // Exit with code 0 after a short life means "already done" — don't restart, don't count as crash.
+        if (detail === 'code 0' && livedMs < 10_000) {
+            this.write('stdout', `[${name}] exited (${detail}, ran ${livedMs}ms) — already done, not restarting.\n`);
+            return;
+        }
         const state = recordExit(this.crashes.get(name) ?? emptyCrashState(), this.now(), livedMs, this.policy);
         this.crashes.set(name, state);
         const decision = decideRestart(state, this.policy);
