@@ -76,6 +76,8 @@
             letter-spacing: 0.04em; padding: 1px 7px; border-radius: 999px; flex: none;
         }
         .wf-status-badge.running { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
+        .wf-status-badge.pending { background: rgba(173, 173, 255, 0.2); color: #adadff; animation: wf-pulse 1.5s ease-in-out infinite; }
+        @keyframes wf-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
         .wf-status-badge.succeeded { background: rgba(66, 214, 157, 0.2); color: #42d69d; }
         .wf-status-badge.failed { background: rgba(255, 54, 94, 0.2); color: #ff365e; }
         .wf-status-badge.stopped { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); }

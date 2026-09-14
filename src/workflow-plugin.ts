@@ -36,7 +36,7 @@ interface ActiveReplay {
     workflowName: string;
     deviceUdid: string;
     startTime: Date;
-    status: 'running' | 'succeeded' | 'failed' | 'stopped';
+    status: 'pending' | 'running' | 'succeeded' | 'failed' | 'stopped';
     currentStep: number;
     totalSteps: number;
     logs: Array<{ step: number; message: string; type: 'info' | 'error' | 'condition' }>;
@@ -97,7 +97,7 @@ function startReplayEntry(workflowId: string, workflowName: string, deviceUdid: 
         workflowName,
         deviceUdid,
         startTime: new Date(),
-        status: 'running',
+        status: 'pending',
         currentStep: 0,
         totalSteps,
         logs: [],
@@ -109,7 +109,7 @@ function startReplayEntry(workflowId: string, workflowName: string, deviceUdid: 
             id: runId,
             workflowId,
             deviceUdid,
-            status: 'running',
+            status: 'pending',
             totalSteps,
             logs: [],
             metadata: metadata ?? {},
@@ -694,6 +694,11 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
 
                 // Enqueue via per-device queue so multiple replays don't run simultaneously on the same device
                 workflowQueue.enqueue(wf.deviceUdid, async () => {
+                    // Update status from pending to running
+                    const replayPending = activeReplays.get(runId);
+                    if (replayPending) replayPending.status = 'running';
+                    void db.update(workflowRuns).set({ status: 'running' }).where(eq(workflowRuns.id, runId)).catch(() => {});
+
                     const abortController = new AbortController();
                     await runSteps(context.remote, wf.deviceUdid, steps, abortController.signal, runId, db);
                 }).catch((error) => {
@@ -703,7 +708,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
 
                 return reply.code(202).send({
                     runId,
-                    status: 'running',
+                    status: 'pending',
                     totalSteps: steps.length,
                     deviceUdid: wf.deviceUdid,
                     workflowId: id,
@@ -714,7 +719,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
             app.post<{ Params: { runId: string } }>('/api/workflows/replay/:runId/stop', async (request, reply) => {
                 const replay = activeReplays.get(request.params.runId);
                 if (!replay) return reply.code(404).send({ error: 'Replay not found' });
-                if (replay.status !== 'running') return reply.code(409).send({ error: 'Replay is not running' });
+                if (replay.status !== 'running' && replay.status !== 'pending') return reply.code(409).send({ error: 'Replay is not running or pending' });
                 finishReplay(request.params.runId, 'stopped', 'Stopped by user', db);
                 return { ok: true };
             });
@@ -799,6 +804,11 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 });
 
                 workflowQueue.enqueue(udid, async () => {
+                    // Update status from pending to running
+                    const replayPending = activeReplays.get(runId);
+                    if (replayPending) replayPending.status = 'running';
+                    void db.update(workflowRuns).set({ status: 'running' }).where(eq(workflowRuns.id, runId)).catch(() => {});
+
                     // 1. Patch import_video step with this generation's video path
                     const importVideoSteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
                         .from(workflowSteps)
@@ -870,7 +880,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     ok: true,
                     message: 'Patched workflow with video path and started replay (import_video step will import during execution)',
                     runId,
-                    status: 'running',
+                    status: 'pending',
                     totalSteps: 0,
                 });
             });
@@ -1207,6 +1217,11 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 });
 
                 workflowQueue.enqueue(udid, async () => {
+                    // Update status from pending to running
+                    const replayPending = activeReplays.get(runId);
+                    if (replayPending) replayPending.status = 'running';
+                    void db.update(workflowRuns).set({ status: 'running' }).where(eq(workflowRuns.id, runId)).catch(() => {});
+
                     // 1. Patch the import_video step with the rendered video path
                     const importVideoSteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
                         .from(workflowSteps)
@@ -1277,7 +1292,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     ok: true,
                     message: 'Local draft queued via workflow',
                     runId,
-                    status: 'running',
+                    status: 'pending',
                     totalSteps: 0,
                 });
             });
