@@ -1,0 +1,1 @@
+ALTER TABLE "scheduler"."workflow_runs" ADD COLUMN IF NOT EXISTS "metadata" jsonb DEFAULT '{}'::jsonb;

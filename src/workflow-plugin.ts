@@ -45,7 +45,52 @@ interface ActiveReplay {
 
 const activeReplays = new Map<string, ActiveReplay>();
 
-function startReplayEntry(workflowId: string, workflowName: string, deviceUdid: string, totalSteps: number, db?: any): string {
+/**
+ * Per-device FIFO queue that processes one async task at a time.
+ * Each device gets its own queue so workflows on different devices run
+ * concurrently, but workflows targeting the same device are serialized.
+ */
+class PerDeviceWorkflowQueue {
+    private readonly queues = new Map<string, Array<{ task: () => Promise<void>; resolve: () => void; reject: (err: unknown) => void }>>();
+    private readonly running = new Set<string>();
+
+    enqueue(deviceUdid: string, task: () => Promise<void>): Promise<void> {
+        return new Promise((resolve, reject) => {
+            let q = this.queues.get(deviceUdid);
+            if (!q) {
+                q = [];
+                this.queues.set(deviceUdid, q);
+            }
+            q.push({ task, resolve, reject });
+            this.processNext(deviceUdid);
+        });
+    }
+
+    private async processNext(deviceUdid: string): Promise<void> {
+        const q = this.queues.get(deviceUdid);
+        if (!q || this.running.has(deviceUdid) || q.length === 0) return;
+        this.running.add(deviceUdid);
+
+        const entry = q.shift()!;
+        try {
+            await entry.task();
+            entry.resolve();
+        } catch (error) {
+            entry.reject(error);
+        } finally {
+            this.running.delete(deviceUdid);
+            // Clean up empty queues
+            if (q.length === 0) {
+                this.queues.delete(deviceUdid);
+            }
+            this.processNext(deviceUdid);
+        }
+    }
+}
+
+const workflowQueue = new PerDeviceWorkflowQueue();
+
+function startReplayEntry(workflowId: string, workflowName: string, deviceUdid: string, totalSteps: number, db?: any, metadata?: Record<string, unknown>): string {
     const runId = crypto.randomUUID();
     activeReplays.set(runId, {
         workflowId,
@@ -67,6 +112,7 @@ function startReplayEntry(workflowId: string, workflowName: string, deviceUdid: 
             status: 'running',
             totalSteps,
             logs: [],
+            metadata: metadata ?? {},
             startedAt: new Date(),
         }).catch(() => {});
     }
@@ -646,10 +692,13 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
 
                 const runId = startReplayEntry(id, wf.name, wf.deviceUdid, steps.length, db);
 
-                // Run replay in background (no await)
-                const abortController = new AbortController();
-                runSteps(context.remote, wf.deviceUdid, steps, abortController.signal, runId, db).catch(() => {
-                    finishReplay(runId, 'failed', 'Unexpected error during replay', db);
+                // Enqueue via per-device queue so multiple replays don't run simultaneously on the same device
+                workflowQueue.enqueue(wf.deviceUdid, async () => {
+                    const abortController = new AbortController();
+                    await runSteps(context.remote, wf.deviceUdid, steps, abortController.signal, runId, db);
+                }).catch((error) => {
+                    console.error(`[replay ${runId}] Unexpected error:`, error);
+                    finishReplay(runId, 'failed', error instanceof Error ? error.message : 'Unexpected error during replay', db);
                 });
 
                 return reply.code(202).send({
@@ -737,126 +786,92 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 if (!videoFile) return reply.code(409).send({ error: 'Generation produced no video file' });
                 const videoPath = pathModule.resolve(pathModule.join(gen.outputDir, videoFile));
 
-                // Patch the import_video step with the video path so the workflow handles the import
-                const importVideoSteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
-                    .from(workflowSteps)
-                    .where(
-                        and(
-                            eq(workflowSteps.workflowId, workflowId),
-                            eq(workflowSteps.stepType, 'import_video'),
-                        )
-                    )
-                    .orderBy(asc(workflowSteps.stepOrder));
-                if (importVideoSteps.length === 0) {
-                    return reply.code(409).send({ error: 'Workflow has no import_video step; cannot queue' });
-                }
-                await db.update(workflowSteps).set({ text: videoPath })
-                    .where(eq(workflowSteps.id, importVideoSteps[0]!.id));
-                console.log(`Patched import_video step with video path: ${videoPath}`);
-
-                // If caption provided, patch the first type_keys step in the workflow
-                // (the rest type_keys steps are for other purposes like hashtag spacing)
-                if (caption?.trim()) {
-                    const typeKeySteps = await db.select({ id: workflowSteps.id, label: workflowSteps.label, stepOrder: workflowSteps.stepOrder })
-                        .from(workflowSteps)
-                        .where(
-                            and(
-                                eq(workflowSteps.workflowId, workflowId),
-                                eq(workflowSteps.stepType, 'type_keys'),
-                            )
-                        )
-                        .orderBy(asc(workflowSteps.stepOrder));
-                    // Only patch the FIRST type_keys step (the main caption entry)
-                    // to avoid typing the caption into auxiliary type_keys steps
-                    if (typeKeySteps.length > 0) {
-                        let captionText = caption.trim();
-                        // Check if the last word is a hashtag; if so, append ' fyp'
-                        const words = captionText.split(/\s+/);
-                        const lastWord = words[words.length - 1];
-                        if (lastWord && lastWord.startsWith('#')) {
-                            captionText += ' fyp';
-                        }
-                        await db.update(workflowSteps).set({ text: captionText })
-                            .where(eq(workflowSteps.id, typeKeySteps[0]!.id));
-                    }
-                }
-
-                // Ensure workflow has the device UDID
-                if (!wf.deviceUdid || wf.deviceUdid !== udid) {
-                    await db.update(workflows).set({ deviceUdid: udid, updatedAt: new Date() })
-                        .where(eq(workflows.id, workflowId));
-                }
-
-                /* ── TEMPORARILY DISABLED: account switcher on queue ──
-                // Switch TikTok account if the generation specifies one
-                if (gen.account) {
-                    const devices = await context.loadDevices();
-                    const device = devices.find((d) => d.udid === udid);
-                    if (!device) {
-                        return reply.code(400).send({ error: `Device ${udid} not found in registry` });
-                    }
-                    const profile = coordinateProfile(device);
-                    const coords = resolveDeviceCoordinates(profile, device.coordinates);
-                    const accountCoords: AccountSwitchCoords = {
-                        profileTabX: coords.tiktok.profileTab.x,
-                        profileTabY: coords.tiktok.profileTab.y,
-                        switcherTriggerX: coords.tiktok.accountSwitcher.x,
-                        switcherTriggerY: coords.tiktok.accountSwitcher.y,
-                    };
-                    const tiktokBundleId = process.env.TIKTOK_BUNDLE_ID ?? 'com.zhiliaoapp.musically';
-                    // Unlock device first — Appium can't launch apps on a locked device
-                    await context.remote.performAction(udid, { type: 'unlock' });
-                    // Wait for the device to fully settle after unlock before Appium tries to connect
-                    await new Promise((r) => setTimeout(r, 2000));
-                    const switchDriver = await appiumSession(udid, tiktokBundleId);
-                    try {
-                        await foregroundTikTok(switchDriver, tiktokBundleId);
-                        await new Promise((r) => setTimeout(r, 3000));
-                        await switchTikTokAccount(switchDriver, context.remote as any, udid, gen.account, accountCoords);
-                    } finally {
-                        await switchDriver.deleteSession().catch(() => {});
-                    }
-                }
-                ─────────────────────────────────────────────────*/
-
-                // Get all steps
-                const steps = await db.select().from(workflowSteps)
-                    .where(eq(workflowSteps.workflowId, workflowId))
-                    .orderBy(asc(workflowSteps.stepOrder));
-                if (steps.length === 0) return reply.code(409).send({ error: 'Workflow has no steps' });
-
                 // Update generation status
                 await db.update(generations).set({ status: 'queued', deviceUdid: udid })
                     .where(eq(generations.id, generationId));
 
-                // Start replay, then reset the type_keys text so captions don't accumulate
-                const runId = startReplayEntry(workflowId, wf.name, udid, steps.length, db);
-                const abortController = new AbortController();
-                runSteps(context.remote, udid, steps, abortController.signal, runId, db)
-                    .catch(() => {
-                        finishReplay(runId, 'failed', 'Unexpected error during replay', db);
-                    })
-                    .finally(() => {
-                        // Reset type_keys and import_video text so each queue starts fresh
-                        const resetText = () => db.update(workflowSteps).set({ text: null })
+                // Enqueue via WorkflowQueue for sequential execution.
+                // Step patching + fetching happens inside the task so concurrent
+                // requests don't overwrite each other's patches.
+                const runId = startReplayEntry(workflowId, wf.name, udid, 0, db, {
+                    sourceId: generationId,
+                    sourceType: 'generation',
+                });
+
+                workflowQueue.enqueue(udid, async () => {
+                    // 1. Patch import_video step with this generation's video path
+                    const importVideoSteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
+                        .from(workflowSteps)
+                        .where(and(
+                            eq(workflowSteps.workflowId, workflowId),
+                            eq(workflowSteps.stepType, 'import_video'),
+                        ))
+                        .orderBy(asc(workflowSteps.stepOrder));
+                    if (importVideoSteps.length > 0) {
+                        await db.update(workflowSteps).set({ text: videoPath })
+                            .where(eq(workflowSteps.id, importVideoSteps[0]!.id));
+                    }
+
+                    // 2. Patch first type_keys step with caption
+                    if (caption?.trim()) {
+                        const typeKeySteps = await db.select({ id: workflowSteps.id, label: workflowSteps.label, stepOrder: workflowSteps.stepOrder })
+                            .from(workflowSteps)
                             .where(and(
                                 eq(workflowSteps.workflowId, workflowId),
                                 eq(workflowSteps.stepType, 'type_keys'),
-                            )).catch(() => {});
-                        const resetImport = () => db.update(workflowSteps).set({ text: null })
-                            .where(and(
-                                eq(workflowSteps.workflowId, workflowId),
-                                eq(workflowSteps.stepType, 'import_video'),
-                            )).catch(() => {});
-                        void Promise.all([resetText(), resetImport()]);
-                    });
+                            ))
+                            .orderBy(asc(workflowSteps.stepOrder));
+                        if (typeKeySteps.length > 0) {
+                            let captionText = caption.trim();
+                            const words = captionText.split(/\s+/);
+                            const lastWord = words[words.length - 1];
+                            if (lastWord && lastWord.startsWith('#')) captionText += ' fyp';
+                            await db.update(workflowSteps).set({ text: captionText })
+                                .where(eq(workflowSteps.id, typeKeySteps[0]!.id));
+                        }
+                    }
+
+                    // 3. Read steps (now patched)
+                    const steps = await db.select().from(workflowSteps)
+                        .where(eq(workflowSteps.workflowId, workflowId))
+                        .orderBy(asc(workflowSteps.stepOrder));
+                    if (steps.length === 0) throw new Error('Workflow has no steps');
+                    const totalSteps = steps.length;
+
+                    // 4. Update replay entry with actual step count
+                    const replay = activeReplays.get(runId);
+                    if (replay) replay.totalSteps = totalSteps;
+                    if (db) {
+                        db.update(workflowRuns).set({ totalSteps })
+                            .where(eq(workflowRuns.id, runId)).catch(() => {});
+                    }
+
+                    // 5. Run the workflow
+                    const abortController = new AbortController();
+                    await runSteps(context.remote, udid, steps, abortController.signal, runId, db);
+                }).catch(() => {
+                    finishReplay(runId, 'failed', 'Unexpected error during replay', db);
+                }).finally(() => {
+                    // Reset type_keys and import_video text so each queue starts fresh
+                    const resetText = () => db.update(workflowSteps).set({ text: null })
+                        .where(and(
+                            eq(workflowSteps.workflowId, workflowId),
+                            eq(workflowSteps.stepType, 'type_keys'),
+                        )).catch(() => {});
+                    const resetImport = () => db.update(workflowSteps).set({ text: null })
+                        .where(and(
+                            eq(workflowSteps.workflowId, workflowId),
+                            eq(workflowSteps.stepType, 'import_video'),
+                        )).catch(() => {});
+                    void Promise.all([resetText(), resetImport()]);
+                });
 
                 return reply.code(202).send({
                     ok: true,
-                    message: `Patched workflow with video path and started replay (import_video step will import during execution)`,
+                    message: 'Patched workflow with video path and started replay (import_video step will import during execution)',
                     runId,
                     status: 'running',
-                    totalSteps: steps.length,
+                    totalSteps: 0,
                 });
             });
 
@@ -1179,82 +1194,91 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                     outputPath: renderedPath,
                 });
 
-                // Patch the import_video step with the rendered video path (not the raw clip)
-                const importVideoSteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
-                    .from(workflowSteps)
-                    .where(
-                        and(
-                            eq(workflowSteps.workflowId, workflowId),
-                            eq(workflowSteps.stepType, 'import_video'),
-                        )
-                    )
-                    .orderBy(asc(workflowSteps.stepOrder));
-                if (importVideoSteps.length === 0) {
-                    // Clean up temp dir before returning
-                    await import('node:fs/promises').then((f) => f.rm(outputDir, { recursive: true, force: true }).catch(() => {}));
-                    return reply.code(409).send({ error: 'Workflow has no import_video step; cannot queue' });
-                }
-                await db.update(workflowSteps).set({ text: renderedPath })
-                    .where(eq(workflowSteps.id, importVideoSteps[0]!.id));
-
-                // Patch caption into the first type_keys step
-                if (draft.caption?.trim()) {
-                    const typeKeySteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
-                        .from(workflowSteps)
-                        .where(
-                            and(
-                                eq(workflowSteps.workflowId, workflowId),
-                                eq(workflowSteps.stepType, 'type_keys'),
-                            )
-                        )
-                        .orderBy(asc(workflowSteps.stepOrder));
-                    if (typeKeySteps.length > 0) {
-                        let captionText = draft.caption.trim();
-                        const words = captionText.split(/\s+/);
-                        const lastWord = words[words.length - 1];
-                        if (lastWord && lastWord.startsWith('#')) captionText += ' fyp';
-                        await db.update(workflowSteps).set({ text: captionText })
-                            .where(eq(workflowSteps.id, typeKeySteps[0]!.id));
-                    }
-                }
-
-                // Ensure workflow has the device UDID
-                if (!wf.deviceUdid || wf.deviceUdid !== udid) {
-                    await db.update(workflows).set({ deviceUdid: udid, updatedAt: new Date() })
-                        .where(eq(workflows.id, workflowId));
-                }
-
                 // Update draft status
                 await db.update(localDrafts).set({ status: 'queued', updatedAt: new Date() })
                     .where(eq(localDrafts.id, draft.id));
 
-                // Run the workflow
-                const steps = await db.select().from(workflowSteps)
-                    .where(eq(workflowSteps.workflowId, workflowId))
-                    .orderBy(asc(workflowSteps.stepOrder));
-                if (steps.length === 0) {
-                    await import('node:fs/promises').then((f) => f.rm(outputDir, { recursive: true, force: true }).catch(() => {}));
-                    return reply.code(409).send({ error: 'Workflow has no steps' });
-                }
+                // Enqueue via WorkflowQueue for sequential execution.
+                // Step patching + fetching happens inside the task so concurrent
+                // requests don't overwrite each other's patches.
+                const runId = startReplayEntry(workflowId, wf.name, udid, 0, db, {
+                    sourceId: draft.id,
+                    sourceType: 'draft',
+                });
 
-                const runId = startReplayEntry(workflowId, wf.name, udid, steps.length, db);
-                const abortController = new AbortController();
-                runSteps(context.remote, udid, steps, abortController.signal, runId, db)
-                    .catch(() => finishReplay(runId, 'failed', 'Unexpected error during replay', db))
-                    .finally(() => {
-                        // Clean up rendered temp video after workflow completes
-                        void import('node:fs/promises').then((f) => f.rm(outputDir, { recursive: true, force: true }).catch(() => {}));
-                    });
+                workflowQueue.enqueue(udid, async () => {
+                    // 1. Patch the import_video step with the rendered video path
+                    const importVideoSteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
+                        .from(workflowSteps)
+                        .where(and(
+                            eq(workflowSteps.workflowId, workflowId),
+                            eq(workflowSteps.stepType, 'import_video'),
+                        ))
+                        .orderBy(asc(workflowSteps.stepOrder));
+                    if (importVideoSteps.length > 0) {
+                        await db.update(workflowSteps).set({ text: renderedPath })
+                            .where(eq(workflowSteps.id, importVideoSteps[0]!.id));
+                    } else {
+                        console.error(`[draft-queue ${runId}] No import_video step found`);
+                    }
 
-                await db.update(localDrafts).set({ status: 'queued', updatedAt: new Date() })
-                    .where(eq(localDrafts.id, draft.id));
+                    // 2. Patch first type_keys step with caption
+                    if (draft.caption?.trim()) {
+                        const typeKeySteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
+                            .from(workflowSteps)
+                            .where(and(
+                                eq(workflowSteps.workflowId, workflowId),
+                                eq(workflowSteps.stepType, 'type_keys'),
+                            ))
+                            .orderBy(asc(workflowSteps.stepOrder));
+                        if (typeKeySteps.length > 0) {
+                            let captionText = draft.caption.trim();
+                            const words = captionText.split(/\s+/);
+                            const lastWord = words[words.length - 1];
+                            if (lastWord && lastWord.startsWith('#')) captionText += ' fyp';
+                            await db.update(workflowSteps).set({ text: captionText })
+                                .where(eq(workflowSteps.id, typeKeySteps[0]!.id));
+                        }
+                    }
+
+                    // 3. Ensure workflow has the device UDID
+                    if (!wf.deviceUdid || wf.deviceUdid !== udid) {
+                        await db.update(workflows).set({ deviceUdid: udid, updatedAt: new Date() })
+                            .where(eq(workflows.id, workflowId));
+                    }
+
+                    // 4. Read steps (now patched with this task's values)
+                    const steps = await db.select().from(workflowSteps)
+                        .where(eq(workflowSteps.workflowId, workflowId))
+                        .orderBy(asc(workflowSteps.stepOrder));
+                    if (steps.length === 0) throw new Error('Workflow has no steps');
+                    const totalSteps = steps.length;
+
+                    // 5. Update replay entry with actual step count
+                    const replay = activeReplays.get(runId);
+                    if (replay) replay.totalSteps = totalSteps;
+                    if (db) {
+                        db.update(workflowRuns).set({ totalSteps })
+                            .where(eq(workflowRuns.id, runId)).catch(() => {});
+                    }
+
+                    // 6. Run the workflow
+                    const abortController = new AbortController();
+                    await runSteps(context.remote, udid, steps, abortController.signal, runId, db);
+                }).catch((error) => {
+                    console.error(`[draft-queue ${runId}] Task error:`, error);
+                    finishReplay(runId, 'failed', error instanceof Error ? error.message : 'Unexpected error during replay', db);
+                }).finally(() => {
+                    // Clean up rendered temp video after workflow completes
+                    void import('node:fs/promises').then((f) => f.rm(outputDir, { recursive: true, force: true }).catch(() => {}));
+                });
 
                 return reply.code(202).send({
                     ok: true,
                     message: 'Local draft queued via workflow',
                     runId,
                     status: 'running',
-                    totalSteps: steps.length,
+                    totalSteps: 0,
                 });
             });
 

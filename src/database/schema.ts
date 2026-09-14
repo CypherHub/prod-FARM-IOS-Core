@@ -182,6 +182,7 @@ export const workflowRuns = schedulerSchema.table('workflow_runs', {
     totalSteps: integer('total_steps').notNull().default(0),
     logs: jsonb('logs').$type<Array<{ step: number; message: string; type: string }>>().notNull().default([]),
     error: text('error'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
     startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'date' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
