@@ -346,9 +346,6 @@ async function runSteps(
                             }
                             case 'open_url': {
                                 if (!step.url) throw new Error('open_url step missing url');
-                                // #region agent log
-                                fetch('http://127.0.0.1:7276/ingest/c84fa4ce-b9c8-4c6e-bbdf-21e53389e3ff',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9337ef'},body:JSON.stringify({sessionId:'9337ef',runId:'dbg1',hypothesisId:'B',location:'workflow-plugin.ts:349',message:'runSteps open_url executing',data:{url:step.url,runId},timestamp:Date.now()})}).catch(()=>{});
-                                // #endregion
                                 await remote.performAction(deviceUdid, { type: 'home' });
                                 await new Promise((r) => setTimeout(r, 1000));
                                 const linkDriver = await appiumSession(deviceUdid, 'com.apple.mobilesafari');
@@ -1190,10 +1187,6 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                 const udid = draft.deviceUdid ?? wf.deviceUdid;
                 if (!udid) return reply.code(400).send({ error: 'No device assigned to this draft or workflow' });
 
-                // #region agent log
-                fetch('http://127.0.0.1:7276/ingest/c84fa4ce-b9c8-4c6e-bbdf-21e53389e3ff',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9337ef'},body:JSON.stringify({sessionId:'9337ef',runId:'dbg1',hypothesisId:'A',location:'workflow-plugin.ts:1187',message:'queue-via-workflow: draft row',data:{draftId:draft.id,bookmarkId:draft.bookmarkId,draftHasMusicField:'musicUrl' in draft,account:draft.account},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
-
                 // Render the trimmed video with hook overlay first
                 const { compositeVideo } = await import('./content/composite.js');
                 const { resolveGalleryFile } = await import('./content/gallery.js');
@@ -1267,11 +1260,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                         }
                     }
 
-                    // #region agent log
-                    fetch('http://127.0.0.1:7276/ingest/c84fa4ce-b9c8-4c6e-bbdf-21e53389e3ff',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9337ef'},body:JSON.stringify({sessionId:'9337ef',runId:'dbg1',hypothesisId:'B',location:'workflow-plugin.ts:1239',message:'queue-via-workflow: open_url steps in workflow',data:{workflowId,draftMusicUrl:draft.musicUrl??null,openUrlSteps:(await db.select({id:workflowSteps.id,url:workflowSteps.url,stepType:workflowSteps.stepType}).from(workflowSteps).where(and(eq(workflowSteps.workflowId,workflowId),eq(workflowSteps.stepType,'open_url'))).orderBy(asc(workflowSteps.stepOrder))).map(s=>({url:s.url}))},timestamp:Date.now()})}).catch(()=>{});
-                    // #endregion
-
-                    // 2. Patch first type_keys step with caption
+                    // 3. Patch first type_keys step with caption
                     if (draft.caption?.trim()) {
                         const typeKeySteps = await db.select({ id: workflowSteps.id, stepOrder: workflowSteps.stepOrder })
                             .from(workflowSteps)
@@ -1290,20 +1279,20 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                         }
                     }
 
-                    // 3. Ensure workflow has the device UDID
+                    // 4. Ensure workflow has the device UDID
                     if (!wf.deviceUdid || wf.deviceUdid !== udid) {
                         await db.update(workflows).set({ deviceUdid: udid, updatedAt: new Date() })
                             .where(eq(workflows.id, workflowId));
                     }
 
-                    // 4. Read steps (now patched with this task's values)
+                    // 5. Read steps (now patched with this task's values)
                     const steps = await db.select().from(workflowSteps)
                         .where(eq(workflowSteps.workflowId, workflowId))
                         .orderBy(asc(workflowSteps.stepOrder));
                     if (steps.length === 0) throw new Error('Workflow has no steps');
                     const totalSteps = steps.length;
 
-                    // 5. Update replay entry with actual step count
+                    // 6. Update replay entry with actual step count
                     const replay = activeReplays.get(runId);
                     if (replay) replay.totalSteps = totalSteps;
                     if (db) {
@@ -1311,7 +1300,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
                             .where(eq(workflowRuns.id, runId)).catch(() => {});
                     }
 
-                    // 6. Run the workflow
+                    // 7. Run the workflow
                     const abortController = new AbortController();
                     await runSteps(context.remote, udid, steps, abortController.signal, runId, db);
                 }).catch((error) => {
