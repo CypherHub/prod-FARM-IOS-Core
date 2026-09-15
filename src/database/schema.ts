@@ -233,6 +233,8 @@ export const localDrafts = schedulerSchema.table('local_drafts', {
     caption: text('caption').notNull().default(''),
     deviceUdid: text('device_udid'),
     account: text('account'),
+    /** The bookmark's sound, carried onto the draft so queueing uses it. */
+    musicUrl: text('music_url'),
     status: localDraftStatus('status').notNull().default('draft'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),

@@ -232,6 +232,7 @@ export class ContentRepository {
             caption: input.caption ?? '',
             deviceUdid: input.deviceUdid ?? null,
             account: input.account ?? null,
+            musicUrl: bookmark.musicUrl ?? null,
         }).returning();
         if (!row) throw new Error('Unable to create local draft');
         return row;
