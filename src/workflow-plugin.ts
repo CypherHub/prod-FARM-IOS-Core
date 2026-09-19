@@ -7,6 +7,7 @@ import { screenshotToJpeg } from './tiktok/vision-guide.js';
 import { tiktokAppiumCapabilities } from './tiktok/appium-session.js';
 import type { PhoneFarmPlugin, PluginRouteContext } from './plugin.js';
 import type { WorkflowStatus, WorkflowStepType, WorkflowStep } from './types.js';
+import { registerPosterRoutes } from './poster/routes.js';
 import { switchTikTokAccount, type AccountSwitchCoords } from './tiktok/actions.js';
 import { foregroundTikTok } from './tiktok/appium-session.js';
 import { resolveDeviceCoordinates } from './devices/coordinates.js';
@@ -492,6 +493,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
         navLinks: [
             { label: 'Workflows', href: '/workflows', order: 2 },
             { label: 'Workflow Runs', href: '/workflow-runs', order: 3 },
+            { label: 'Poster', href: '/poster', order: 4 },
         ],
         registerRoutes(context: PluginRouteContext) {
             const { app } = context;
@@ -1357,6 +1359,7 @@ export function createWorkflowPlugin(): PhoneFarmPlugin {
             });
 
             // --- Page routes are registered in main app ---
+            registerPosterRoutes(context);
         },
     };
 }

@@ -145,7 +145,7 @@ Find the **"Create Draft (clone)"** workflow (currently id
 `type_keys` caption step, and a final tap on **"Save Drafts"** (never
 "Post"). Confirm that last property by reading its steps
 (`GET /api/workflows/<id>`) before trusting it — a similarly-named
-"Post Draft Workflow" on the same device actually **publishes** an existing
+"Post from Drafts of @my_sane_tea" on the same device actually **publishes** an existing
 draft; do not use it here.
 
 For each draft, strictly sequential — wait for one to finish before starting
@@ -282,7 +282,7 @@ This automates a real iPhone. Things that only show up by looking:
   happened.
 - **Never publish.** Every workflow used here ends at "Save to Drafts."
   Verify that by reading a workflow's steps before pointing anything new at
-  it — don't trust a name alone (see the "Post Draft Workflow" trap in Step 5).
+  it — don't trust a name alone (see the "Post from Drafts of @my_sane_tea" trap in Step 5).
 
 ## Reference
 

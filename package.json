@@ -37,6 +37,7 @@
     "sync:albums": "node --env-file-if-exists=.env scripts/sync-shared-albums.mjs",
     "prestart": "node --env-file-if-exists=.env scripts/sync-shared-albums.mjs",
     "worker": "node --env-file-if-exists=.env --env-file-if-exists=.env.devices --import tsx src/scheduler/worker.ts",
+    "poster": "node --env-file-if-exists=.env --env-file-if-exists=.env.devices --import tsx src/poster/worker.ts",
     "web": "node --env-file-if-exists=.env --env-file-if-exists=.env.devices --import tsx src/api/server.ts",
     "start": "node --env-file-if-exists=.env --env-file-if-exists=.env.devices --import tsx src/supervise.ts",
     "build:web": "tsc -p tsconfig.web.json",

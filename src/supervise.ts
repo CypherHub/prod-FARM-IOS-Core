@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const FARM_PROCESSES = ['appium', 'wda:service', 'worker', 'web'] as const;
+export const FARM_PROCESSES = ['appium', 'wda:service', 'worker', 'web', 'poster'] as const;
 
 export interface RestartPolicy {
     maxConsecutive: number;

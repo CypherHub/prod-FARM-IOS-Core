@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Poster · Handler</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <a class="brand-name" href="/">iOS Farm</a>
+                <a class="brand-by" href="https://gethandler.ai" target="_blank" rel="noopener">by Handler</a>
+            </div>
+            <nav class="topbar-nav"><a class="button secondary" href="/">Devices</a>__PLUGIN_NAV____AUTH_NAV__</nav>
+        </div>
+    </header>
+    <main class="shell">
+        <header class="page-header">
+            <div>
+                <span class="eyebrow">Draft publishing</span>
+                <h1>Poster</h1>
+                <p>One post per account per selected window per day, in New York time. Each account has its own slots. Switch account, then publish the top draft.</p>
+            </div>
+            <div class="inline-actions">
+                <span id="poster-status" class="run-meta">Loading…</span>
+                <button id="toggle-enabled" class="button primary" type="button">Resume</button>
+            </div>
+        </header>
+
+        <section class="panel">
+            <div class="section-heading"><div><span class="eyebrow">When</span><h2>Schedule</h2></div></div>
+            <p id="window-meta" class="muted"></p>
+        </section>
+
+        <section class="panel">
+            <div class="section-heading"><div><span class="eyebrow">Accounts</span><h2>@pixl.robotics and @my_sane_tea</h2></div></div>
+            <div id="account-list" class="poster-accounts"><div class="loading-card"><span class="spinner"></span>Loading accounts…</div></div>
+        </section>
+
+        <section class="panel">
+            <div class="section-heading"><div><span class="eyebrow">History</span><h2>Recent runs</h2></div></div>
+            <div id="history-list" class="task-list"><div class="empty-state"><h2>No poster runs yet</h2><p>Resume the poster or tap Post now.</p></div></div>
+        </section>
+    </main>
+    <footer class="app-footer">__FOOTER__</footer>
+    <script type="module" src="/assets/poster.js"></script>
+</body>
+</html>

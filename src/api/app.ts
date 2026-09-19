@@ -57,6 +57,8 @@ interface LoadedDashboardTheme {
     workflowEditorScript: string;
     workflowRunsHtml: string;
     workflowRunsScript: string;
+    posterHtml: string;
+    posterScript: string;
 }
 
 function errorMessage(error: unknown): string {
@@ -174,7 +176,7 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
         const require = createRequire(import.meta.url);
         const [indexHtml, deviceHtml, tasksHtml, scheduleHtml, registerDeviceHtml, styles, deviceScript, tasksScript, scheduleScript, registerDeviceScript, htmx,
             workflowsHtml, workflowEditorHtml, workflowsScript, workflowEditorScript,
-            workflowRunsHtml, workflowRunsScript] = await Promise.all([
+            workflowRunsHtml, workflowRunsScript, posterHtml, posterScript] = await Promise.all([
             readFile(path.join(root, 'templates/index.html'), 'utf8'),
             readFile(path.join(root, 'templates/device.html'), 'utf8'),
             readFile(path.join(root, 'templates/tasks.html'), 'utf8'),
@@ -192,6 +194,8 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
             readFile(path.join(root, 'assets/workflow-editor.js'), 'utf8'),
             readFile(path.join(root, 'templates/workflow-runs.html'), 'utf8'),
             readFile(path.join(root, 'assets/workflow-runs.js'), 'utf8'),
+            readFile(path.join(root, 'templates/poster.html'), 'utf8'),
+            readFile(path.join(root, 'assets/poster.js'), 'utf8'),
         ]);
         // Content-hash every asset URL in the templates so a changed file gets a
         // fresh URL that no browser or CDN can serve stale.
@@ -201,6 +205,7 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
             'register-device.js': assetHash(registerDeviceScript),
             'workflows.js': assetHash(workflowsScript), 'workflow-editor.js': assetHash(workflowEditorScript),
             'workflow-runs.js': assetHash(workflowRunsScript),
+            'poster.js': assetHash(posterScript),
             'htmx.min.js': assetHash(htmx),
         };
         const finalize = (html: string) => {
@@ -215,8 +220,9 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
             registerDeviceHtml: finalize(registerDeviceHtml),
             workflowsHtml: finalize(workflowsHtml), workflowEditorHtml: finalize(workflowEditorHtml),
             workflowRunsHtml: finalize(workflowRunsHtml),
+            posterHtml: finalize(posterHtml),
             styles, deviceScript, tasksScript, scheduleScript, registerDeviceScript,
-            workflowsScript, workflowEditorScript, workflowRunsScript, htmx,
+            workflowsScript, workflowEditorScript, workflowRunsScript, posterScript, htmx,
         };
     }
 
@@ -598,6 +604,7 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
         app.get('/assets/workflows.js', asset('text/javascript', theme.workflowsScript));
         app.get('/assets/workflow-editor.js', asset('text/javascript', theme.workflowEditorScript));
         app.get('/assets/workflow-runs.js', asset('text/javascript', theme.workflowRunsScript));
+        app.get('/assets/poster.js', asset('text/javascript', theme.posterScript));
         app.get('/api/fragments/devices', async (_request, reply) => {
             const devices = await registeredWithStatus();
             const active = devices.filter((device) => !device.disabled);
@@ -687,6 +694,9 @@ export async function createApp(options: CreateAppOptions): Promise<FastifyInsta
     ));
     app.get('/workflow-runs', async (_request, reply) => reply.type('text/html').send(
         themed?.workflowRunsHtml ?? renderPage('Workflow Runs', '<h1>Workflow Runs</h1><p>The themed dashboard provides a workflow runs log page here.</p>'),
+    ));
+    app.get('/poster', async (_request, reply) => reply.type('text/html').send(
+        themed?.posterHtml ?? renderPage('Poster', '<h1>Poster</h1><p>The themed dashboard provides a draft-poster page here.</p>'),
     ));
     app.get<{ Params: { id: string } }>('/workflows/:id', async (request, reply) => reply.type('text/html').send(
         themed?.workflowEditorHtml ?? renderPage('Workflow Editor', '<h1>Workflow Editor</h1><p>The themed dashboard provides a workflow editor page here.</p>'),

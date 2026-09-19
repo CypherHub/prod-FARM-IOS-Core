@@ -10,6 +10,7 @@ import {
     nextBackoff,
     recordExit,
     restartPolicyFromEnv,
+    FARM_PROCESSES,
     type RestartPolicy,
 } from '../src/supervise.js';
 
@@ -32,6 +33,10 @@ const policy: RestartPolicy = {
     initialBackoffMs: 1_000,
     maxBackoffMs: 8_000,
 };
+
+test('default farm processes include poster after web', () => {
+    assert.deepEqual(FARM_PROCESSES, ['appium', 'wda:service', 'worker', 'web', 'poster']);
+});
 
 test('restartPolicyFromEnv uses defaults and rejects non-positive values', () => {
     const defaults = restartPolicyFromEnv({});

@@ -56,7 +56,7 @@ test('a configured auth provider adds a Log out link to the nav', async (context
     });
     context.after(() => app.close());
 
-    for (const url of ['/', '/tasks', '/devices/register']) {
+    for (const url of ['/', '/tasks', '/devices/register', '/poster']) {
         const res = await inject(app, { method: 'GET', url });
         assert.equal(res.statusCode, 200, url);
         assert.match(res.body, /href="\/auth\/logout"[^>]*>Log out</, url);
@@ -85,7 +85,7 @@ test('a plugin can contribute nav links and register its own routes', async (con
     });
     context.after(() => app.close());
 
-    for (const url of ['/', '/tasks', '/devices/register']) {
+    for (const url of ['/', '/tasks', '/devices/register', '/poster']) {
         const res = await inject(app, { method: 'GET', url });
         assert.equal(res.statusCode, 200, url);
         assert.match(res.body, /href="\/stats"[^>]*>Stats</, url);
@@ -95,6 +95,10 @@ test('a plugin can contribute nav links and register its own routes', async (con
     const stats = await inject(app, { method: 'GET', url: '/stats' });
     assert.equal(stats.statusCode, 200);
     assert.match(stats.body, /<h1>stats<\/h1>/);
+
+    const poster = await inject(app, { method: 'GET', url: '/poster' });
+    assert.match(poster.body, /Draft publishing/);
+    assert.match(poster.body, /\/assets\/poster\.js\?v=[\w-]+/);
 });
 
 test('the CSRF guard rejects cross-origin writes even with no auth provider', async (context) => {

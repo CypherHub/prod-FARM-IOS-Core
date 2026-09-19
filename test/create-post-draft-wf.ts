@@ -41,7 +41,12 @@ interface StepDef {
 const steps: StepDef[] = [
     // 1. Unlock phone
     { stepType: 'unlock', label: 'Unlock Phone' },
-    // 2. Deep link to TikTok profile page (universal link opens TikTok directly to profile)
+    {
+        stepType: 'if_condition',
+        label: 'Abort if on Wi-Fi',
+        aiQuestion: 'Look at the iPhone status bar at the very top of the screen. Is this device NOT connected to Wi-Fi? Answer YES only if there is no Wi-Fi fan/arcs icon in the status bar (cellular signal bars, LTE, 5G, or no Wi-Fi symbol is OK). Answer NO if you can see a Wi-Fi icon. We must not post while on Wi-Fi.',
+    },
+    // 3. Deep link to TikTok profile page (universal link opens TikTok directly to profile)
     { stepType: 'open_url', label: 'Open TikTok to profile', url: 'https://www.tiktok.com/@my_sane_tea' },
     // 3. Let TikTok load
     { stepType: 'wait', label: 'Let TikTok load profile', waitMs: 5000 },
@@ -105,7 +110,7 @@ async function main() {
     const wf = await api(WF_API, {
         method: 'POST',
         body: JSON.stringify({
-            name: 'Post Draft Workflow',
+            name: 'Post from Drafts of @my_sane_tea',
             deviceUdid: DEVICE_UDID,
         }),
     }) as { id: string };
@@ -124,7 +129,7 @@ async function main() {
     // 3. Print summary
     console.log('\n=== Workflow Created ===');
     console.log(`ID: ${wf.id}`);
-    console.log(`Name: Post Draft Workflow`);
+    console.log(`Name: Post from Drafts of @my_sane_tea`);
     console.log(`Device: ${DEVICE_UDID}`);
     console.log(`Steps: ${steps.length}`);
 
